@@ -21,4 +21,5 @@ matrix:
       script:
         - cd $TRAVIS_BUILD_DIR/src
         - golangci-lint run
+        - go test -v src/*.go
         - GOOS=linux go build -ldflags="-s -w" -o bin/mailsender src/main.go

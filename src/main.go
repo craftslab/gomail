@@ -16,46 +16,101 @@ import (
     "io/ioutil"
     "log"
     "os"
+    "path/filepath"
     "strings"
 
     "gopkg.in/alecthomas/kingpin.v2"
+    "gopkg.in/gomail.v2"
 )
 
 const (
-    AUTHOR  = "Jia Jia"
-    VERSION = "1.0.0"
+    author  = "Jia Jia"
+    version = "1.0.0"
 )
 
 const (
-    PASS = "PASS"
-    PORT = 25
-    SENDER = "<mail@example.com>"
-    SEP = ","
-    SMTP = "smtp.example.com"
-    USER = "USER"
+    host = "smtp.example.com"
+    pass = "pass"
+    port = 25
+    sender = "<mail@example.com>"
+    sep = ","
+    user = "user"
 )
 
 var (
 	contentTypeMap = map[string]string {
-	    "HTML": "html",
-        "PLAIN_TEXT": "text",
+        "HTML": "text/html",
+        "PLAIN_TEXT": "text/plain",
 	}
 )
 
 var (
-    app = kingpin.New("mailsender", "Mail sender written in Go").Author(AUTHOR).Version(VERSION)
+    app = kingpin.New("mailsender", "Mail sender written in Go").Author(author).Version(version)
 
     attachment = app.Flag("attachment", "Attachment, format: attach1,attach2,...").Short('a').String()
     body = app.Flag("body", "Body").Short('b').String()
     contentType = app.Flag("content_type", "Content type, format: HTML or PLAIN_TEXT (default)").
         Short('c').Default("PLAIN_TEXT").Enum("HTML", "PLAIN_TEXT")
     header = app.Flag("header", "Header").Short('e').String()
-    recipients = app.Flag("recipients", "Recipients, format: alen@example.com,cc:catherine@example.com").Short('r').Required().String()
+    recipients = app.Flag("recipients", "Recipients, format: alen@example.com,cc:bob@example.com").Short('r').Required().String()
     title = app.Flag("title", "Title").Short('t').String()
 )
 
-func sendMail(attachment []string, body string, contentType string, header string, recipients string, title string) bool {
+func checkFile(name string) (string, bool) {
+    fi, err := os.Lstat(name)
+    if err != nil {
+        root, _ := os.Getwd()
+        fullname := filepath.Join(root, name)
+        fi, err = os.Lstat(fullname)
+        if err != nil {
+            return name, false
+		}
+        name = fullname
+    }
+
+    if fi == nil || !fi.Mode().IsRegular() {
+        return name, false
+    }
+
+    return name, true
+}
+
+func sendMail(from string, to []string, cc []string, subject string, contentType string, body string, attachment []string) bool {
+    msg := gomail.NewMessage()
+
+    msg.SetAddressHeader("From", sender, from)
+    msg.SetHeader("To", strings.Join(to, sep))
+    msg.SetHeader("Cc", strings.Join(cc, sep))
+    msg.SetHeader("Subject", subject)
+    msg.SetBody(contentType, body)
+
+    for _, item := range attachment {
+        msg.Attach(item, gomail.Rename(filepath.Base(item)))
+    }
+
+    dialer := gomail.NewDialer(host, port, user, pass)
+
+    if err := dialer.DialAndSend(msg); err != nil {
+    	return false
+    }
+
 	return true
+}
+
+func parseRecipients(data string) ([]string, []string) {
+	var cc []string
+    var to []string
+
+    buf := strings.Split(data, sep)
+    for _, item := range buf {
+        if hasPrefix := strings.HasPrefix(item, "cc:"); hasPrefix {
+            cc = append(cc, strings.ReplaceAll(item, "cc:", ""))
+        } else {
+            to = append(to, item)
+        }
+    }
+
+    return cc, to
 }
 
 func parseContentType(data string) (string, bool) {
@@ -67,36 +122,37 @@ func parseContentType(data string) (string, bool) {
     return buf, true
 }
 
-func parseBody(data string) (string, bool) {
-    fi, err := os.Lstat(data)
-    if err != nil || fi == nil || !fi.Mode().IsRegular() {
-        return data, false
+func parseBody(name string) (string, bool) {
+    name, status := checkFile(name)
+    if !status {
+        return name, false
     }
 
-    buf, err := ioutil.ReadFile(data)
+    buf, err := ioutil.ReadFile(name)
     if err != nil {
-        return data, false
+        return name, false
     }
 
     return string(buf), true
 }
 
-func parseAttachment(data string) ([]string, bool) {
-    var buf []string
+func parseAttachment(name string) ([]string, bool) {
+    var names []string
+    var status bool
 
-	if len(data) == 0 {
-		return buf, true
+	if len(name) == 0 {
+		return names, true
     }
 
-	buf = strings.Split(data, ",")
-	for _, item := range buf {
-        fi, err := os.Lstat(item)
-        if err != nil || fi == nil || !fi.Mode().IsRegular() {
+	names = strings.Split(name, sep)
+	for i := 0; i < len(names); i++ {
+        names[i], status = checkFile(names[i])
+        if !status {
             return nil, false
         }
     }
 
-    return buf, true
+    return names, true
 }
 
 func main() {
@@ -114,7 +170,9 @@ func main() {
         log.Fatal("Invalid content_type")
     }
 
-    status := sendMail(attachment, body, contentType, *header, *recipients, *title)
+    to, cc := parseRecipients(*recipients)
+
+    status := sendMail(*header, to, cc, *title, contentType, body, attachment)
     if status == false {
         log.Fatal("Failed to send mail")
     }
