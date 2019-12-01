@@ -173,7 +173,7 @@ func main() {
     to, cc := parseRecipients(*recipients)
 
     status := sendMail(*header, to, cc, *title, contentType, body, attachment)
-    if status == false {
+    if !status {
         log.Fatal("Failed to send mail")
     }
 
