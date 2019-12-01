@@ -38,10 +38,10 @@ const (
 )
 
 var (
-	contentTypeMap = map[string]string {
+    contentTypeMap = map[string]string {
         "HTML": "text/html",
         "PLAIN_TEXT": "text/plain",
-	}
+    }
 )
 
 var (
@@ -64,7 +64,7 @@ func checkFile(name string) (string, bool) {
         fi, err = os.Lstat(fullname)
         if err != nil {
             return name, false
-		}
+        }
         name = fullname
     }
 
@@ -91,14 +91,14 @@ func sendMail(from string, to []string, cc []string, subject string, contentType
     dialer := gomail.NewDialer(host, port, user, pass)
 
     if err := dialer.DialAndSend(msg); err != nil {
-    	return false
+        return false
     }
 
-	return true
+    return true
 }
 
 func parseRecipients(data string) ([]string, []string) {
-	var cc []string
+    var cc []string
     var to []string
 
     buf := strings.Split(data, sep)
@@ -114,9 +114,9 @@ func parseRecipients(data string) ([]string, []string) {
 }
 
 func parseContentType(data string) (string, bool) {
-	buf, isPresent := contentTypeMap[data]
-	if !isPresent {
-	    return "", false
+    buf, isPresent := contentTypeMap[data]
+    if !isPresent {
+        return "", false
     }
 
     return buf, true
@@ -140,12 +140,12 @@ func parseAttachment(name string) ([]string, bool) {
     var names []string
     var status bool
 
-	if len(name) == 0 {
-		return names, true
+    if len(name) == 0 {
+        return names, true
     }
 
-	names = strings.Split(name, sep)
-	for i := 0; i < len(names); i++ {
+    names = strings.Split(name, sep)
+    for i := 0; i < len(names); i++ {
         names[i], status = checkFile(names[i])
         if !status {
             return nil, false

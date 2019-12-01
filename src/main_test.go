@@ -13,78 +13,78 @@
 package main
 
 import (
-	"testing"
+    "testing"
 )
 
 func TestCheckFile(t *testing.T) {
-	if _, valid := checkFile("body.txt"); valid {
-		t.Error("FAIL")
-	}
+    if _, valid := checkFile("body.txt"); valid {
+        t.Error("FAIL")
+    }
 
-	if _, valid := checkFile("test"); valid {
-		t.Error("FAIL")
-	}
+    if _, valid := checkFile("test"); valid {
+        t.Error("FAIL")
+    }
 
-	if _, valid := checkFile("../test/body.txt"); !valid {
-		t.Error("FAIL")
-	}
+    if _, valid := checkFile("../test/body.txt"); !valid {
+        t.Error("FAIL")
+    }
 }
 
 func TestSendMail(t *testing.T) {
-	header := "header"
-	to := []string {"alen@example.com,bob@example.com"}
-	cc := []string {"catherine@example.com"}
-	title := "title"
-	contentType := "PLAIN_TEXT"
-	body := "../test/body.txt"
-	attachment := []string {"../test/attach1.txt", "../test/attach2.text"}
+    header := "header"
+    to := []string {"alen@example.com,bob@example.com"}
+    cc := []string {"catherine@example.com"}
+    title := "title"
+    contentType := "PLAIN_TEXT"
+    body := "../test/body.txt"
+    attachment := []string {"../test/attach1.txt", "../test/attach2.text"}
 
-	sendMail(header, to, cc, title, contentType, body, attachment)
+    sendMail(header, to, cc, title, contentType, body, attachment)
 }
 
 func TestParseRecipients(t *testing.T) {
-	recipients := "alen@example.com,cc:bob@example.com"
-	parseRecipients(recipients)
+    recipients := "alen@example.com,cc:bob@example.com"
+    parseRecipients(recipients)
 }
 
 func TestParseContentType(t *testing.T) {
-	if _, valid := parseContentType("FOO"); valid {
-		t.Error("FAIL")
-	}
+    if _, valid := parseContentType("FOO"); valid {
+        t.Error("FAIL")
+    }
 
-	if _, valid := parseContentType("HTML"); !valid {
-		t.Error("FAIL")
-	}
+    if _, valid := parseContentType("HTML"); !valid {
+        t.Error("FAIL")
+    }
 
-	if _, valid := parseContentType("PLAIN_TEXT"); !valid {
-		t.Error("FAIL")
-	}
+    if _, valid := parseContentType("PLAIN_TEXT"); !valid {
+        t.Error("FAIL")
+    }
 }
 
 func TestParseBody(t *testing.T) {
-	if _, valid := parseBody(""); valid {
-		t.Error("FAIL")
-	}
+    if _, valid := parseBody(""); valid {
+        t.Error("FAIL")
+    }
 
-	if _, valid := parseBody("body.txt"); valid {
-		t.Error("FAIL")
-	}
+    if _, valid := parseBody("body.txt"); valid {
+        t.Error("FAIL")
+    }
 
-	if _, valid := parseBody("../test/body.txt"); !valid {
-		t.Error("FAIL")
-	}
+    if _, valid := parseBody("../test/body.txt"); !valid {
+        t.Error("FAIL")
+    }
 }
 
 func TestParseAttachment(t *testing.T) {
-	if _, valid := parseAttachment(""); !valid {
-		t.Error("FAIL")
-	}
+    if _, valid := parseAttachment(""); !valid {
+        t.Error("FAIL")
+    }
 
-	if _, valid := parseAttachment("attach1.txt,attach2.txt"); valid {
-		t.Error("FAIL")
-	}
+    if _, valid := parseAttachment("attach1.txt,attach2.txt"); valid {
+        t.Error("FAIL")
+    }
 
-	if _, valid := parseAttachment("../test/attach1.txt,../test/attach2.txt"); !valid {
-		t.Error("FAIL")
-	}
+    if _, valid := parseAttachment("../test/attach1.txt,../test/attach2.txt"); !valid {
+        t.Error("FAIL")
+    }
 }
