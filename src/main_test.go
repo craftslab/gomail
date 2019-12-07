@@ -42,6 +42,36 @@ func TestSendMail(t *testing.T) {
     sendMail(header, to, cc, title, contentType, body, attachment)
 }
 
+func TestCollectDifference(t *testing.T) {
+    bufA := []string {"alen@example.com", "bob@example.com"}
+    bufB := []string {"alen@example.com", "catherine@example.com"}
+
+    _ = collectDifference(bufA, bufB)
+}
+
+func checkDuplicates(data []string) bool {
+    found := false
+    key := make(map[string]bool)
+
+    for _, item := range data {
+        if _, isPresent := key[item]; isPresent {
+            found = true
+            break
+        }
+    }
+
+    return found
+}
+
+func TestRemoveDuplicates(t *testing.T) {
+    buf := []string {"alen@example.com", "bob@example.com", "alen@example.com"}
+    buf = removeDuplicates(buf)
+
+    if found := checkDuplicates(buf); found {
+        t.Error("FAIL")
+    }
+}
+
 func TestParseRecipients(t *testing.T) {
     recipients := "alen@example.com,cc:bob@example.com"
     parseRecipients(recipients)

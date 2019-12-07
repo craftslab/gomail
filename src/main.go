@@ -97,6 +97,39 @@ func sendMail(from string, to []string, cc []string, subject string, contentType
     return true
 }
 
+func collectDifference(data []string, other []string) []string {
+    var buf []string
+    key := make(map[string]bool)
+
+    for _, item := range other {
+        if _, isPresent := key[item]; !isPresent {
+            key[item] = true
+        }
+    }
+
+    for _, item := range data {
+        if _, isPresent := key[item]; !isPresent {
+            buf = append(buf, item)
+        }
+    }
+
+    return buf
+}
+
+func removeDuplicates(data []string) []string {
+    var buf []string
+    key := make(map[string]bool)
+
+    for _, item := range data {
+        if _, isPresent := key[item]; !isPresent {
+            key[item] = true
+            buf = append(buf, item)
+        }
+    }
+
+    return buf
+}
+
 func parseRecipients(data string) ([]string, []string) {
     var cc []string
     var to []string
@@ -109,6 +142,10 @@ func parseRecipients(data string) ([]string, []string) {
             to = append(to, item)
         }
     }
+
+    cc = removeDuplicates(cc)
+    to = removeDuplicates(to)
+    cc = collectDifference(cc, to)
 
     return cc, to
 }
