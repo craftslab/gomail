@@ -32,10 +32,20 @@ const (
     host = "smtp.example.com"
     pass = "pass"
     port = 25
-    sender = "<mail@example.com>"
+    sender = "mail@example.com"
     sep = ","
     user = "user"
 )
+
+type Mail struct {
+    attachment []string
+    body string
+    cc []string
+    contentType string
+    from string
+    subject string
+    to []string
+}
 
 var (
     contentTypeMap = map[string]string {
@@ -57,34 +67,36 @@ var (
 )
 
 func checkFile(name string) (string, bool) {
+    buf := name
+
     fi, err := os.Lstat(name)
     if err != nil {
         root, _ := os.Getwd()
         fullname := filepath.Join(root, name)
         fi, err = os.Lstat(fullname)
         if err != nil {
-            return name, false
+            return buf, false
         }
-        name = fullname
+        buf = fullname
     }
 
     if fi == nil || !fi.Mode().IsRegular() {
-        return name, false
+        return buf, false
     }
 
-    return name, true
+    return buf, true
 }
 
-func sendMail(from string, to []string, cc []string, subject string, contentType string, body string, attachment []string) bool {
+func sendMail(data *Mail) bool {
     msg := gomail.NewMessage()
 
-    msg.SetAddressHeader("From", sender, from)
-    msg.SetHeader("To", strings.Join(to, sep))
-    msg.SetHeader("Cc", strings.Join(cc, sep))
-    msg.SetHeader("Subject", subject)
-    msg.SetBody(contentType, body)
+    msg.SetAddressHeader("From", sender, data.from)
+    msg.SetHeader("Cc", data.cc[:]...)
+    msg.SetHeader("Subject", data.subject)
+    msg.SetHeader("To", data.to[:]...)
+    msg.SetBody(data.contentType, data.body)
 
-    for _, item := range attachment {
+    for _, item := range data.attachment {
         msg.Attach(item, gomail.Rename(filepath.Base(item)))
     }
 
@@ -159,15 +171,15 @@ func parseContentType(data string) (string, bool) {
     return buf, true
 }
 
-func parseBody(name string) (string, bool) {
-    name, status := checkFile(name)
+func parseBody(data string) (string, bool) {
+    _name, status := checkFile(data)
     if !status {
-        return name, false
+        return data, false
     }
 
-    buf, err := ioutil.ReadFile(name)
+    buf, err := ioutil.ReadFile(_name)
     if err != nil {
-        return name, false
+        return data, false
     }
 
     return string(buf), true
@@ -209,7 +221,17 @@ func main() {
 
     to, cc := parseRecipients(*recipients)
 
-    status := sendMail(*header, to, cc, *title, contentType, body, attachment)
+    mail := Mail {
+        attachment,
+        body,
+        cc,
+        contentType,
+        *header,
+        *title,
+        to,
+    }
+
+    status := sendMail(&mail)
     if !status {
         log.Fatal("Failed to send mail")
     }

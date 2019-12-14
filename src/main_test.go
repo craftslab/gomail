@@ -31,15 +31,17 @@ func TestCheckFile(t *testing.T) {
 }
 
 func TestSendMail(t *testing.T) {
-    header := "header"
-    to := []string {"alen@example.com,bob@example.com"}
-    cc := []string {"catherine@example.com"}
-    title := "title"
-    contentType := "PLAIN_TEXT"
-    body := "../test/body.txt"
-    attachment := []string {"../test/attach1.txt", "../test/attach2.text"}
+    mail := Mail {
+        []string {"../test/attach1.txt", "../test/attach2.text"},
+        "../test/body.txt",
+        []string {"catherine@example.com"},
+        "PLAIN_TEXT",
+        "FROM",
+        "SUBJECT",
+        []string {"alen@example.com, bob@example.com"},
+    }
 
-    sendMail(header, to, cc, title, contentType, body, attachment)
+    sendMail(&mail)
 }
 
 func TestCollectDifference(t *testing.T) {
