@@ -13,6 +13,7 @@
 package main
 
 import (
+    "encoding/json"
     "io/ioutil"
     "log"
     "os"
@@ -28,23 +29,23 @@ const (
     version = "1.0.0"
 )
 
-const (
-    host = "smtp.example.com"
-    pass = "pass"
-    port = 25
-    sender = "mail@example.com"
-    sep = ","
-    user = "user"
-)
+type Config struct {
+    Host string `json:"host"`
+    Pass string `json:"pass"`
+    Port int `json:"port"`
+    Sender string `json:"sender"`
+    Sep string `json:"sep"`
+    User string `json:"user"`
+}
 
 type Mail struct {
-    attachment []string
-    body string
-    cc []string
-    contentType string
-    from string
-    subject string
-    to []string
+    Attachment []string
+    Body string
+    Cc []string
+    ContentType string
+    From string
+    Subject string
+    To []string
 }
 
 var (
@@ -57,13 +58,14 @@ var (
 var (
     app = kingpin.New("mailsender", "Mail sender written in Go").Author(author).Version(version)
 
-    attachment = app.Flag("attachment", "Attachment, format: attach1,attach2,...").Short('a').String()
-    body = app.Flag("body", "Body").Short('b').String()
+    attachment = app.Flag("attachment", "Attachment files, format: attach1,attach2,...").Short('a').String()
+    body = app.Flag("body", "Body text or file").Short('b').String()
+    config = app.Flag("config", "Config file, format: .json").Short('c').String()
     contentType = app.Flag("content_type", "Content type, format: HTML or PLAIN_TEXT (default)").
-        Short('c').Default("PLAIN_TEXT").Enum("HTML", "PLAIN_TEXT")
-    header = app.Flag("header", "Header").Short('e').String()
-    recipients = app.Flag("recipients", "Recipients, format: alen@example.com,cc:bob@example.com").Short('r').Required().String()
-    title = app.Flag("title", "Title").Short('t').String()
+        Short('e').Default("PLAIN_TEXT").Enum("HTML", "PLAIN_TEXT")
+    header = app.Flag("header", "Header text").Short('r').String()
+    recipients = app.Flag("recipients", "Recipients list, format: alen@example.com,cc:bob@example.com").Short('p').Required().String()
+    title = app.Flag("title", "Title text").Short('t').String()
 )
 
 func checkFile(name string) (string, bool) {
@@ -87,20 +89,20 @@ func checkFile(name string) (string, bool) {
     return buf, true
 }
 
-func sendMail(data *Mail) bool {
+func sendMail(config *Config, data *Mail) bool {
     msg := gomail.NewMessage()
 
-    msg.SetAddressHeader("From", sender, data.from)
-    msg.SetHeader("Cc", data.cc[:]...)
-    msg.SetHeader("Subject", data.subject)
-    msg.SetHeader("To", data.to[:]...)
-    msg.SetBody(data.contentType, data.body)
+    msg.SetAddressHeader("From", config.Sender, data.From)
+    msg.SetHeader("Cc", data.Cc[:]...)
+    msg.SetHeader("Subject", data.Subject)
+    msg.SetHeader("To", data.To[:]...)
+    msg.SetBody(data.ContentType, data.Body)
 
-    for _, item := range data.attachment {
+    for _, item := range data.Attachment {
         msg.Attach(item, gomail.Rename(filepath.Base(item)))
     }
 
-    dialer := gomail.NewDialer(host, port, user, pass)
+    dialer := gomail.NewDialer(config.Host, config.Port, config.User, config.Pass)
 
     if err := dialer.DialAndSend(msg); err != nil {
         return false
@@ -142,11 +144,11 @@ func removeDuplicates(data []string) []string {
     return buf
 }
 
-func parseRecipients(data string) ([]string, []string) {
+func parseRecipients(config *Config, data string) ([]string, []string) {
     var cc []string
     var to []string
 
-    buf := strings.Split(data, sep)
+    buf := strings.Split(data, config.Sep)
     for _, item := range buf {
         if hasPrefix := strings.HasPrefix(item, "cc:"); hasPrefix {
             cc = append(cc, strings.ReplaceAll(item, "cc:", ""))
@@ -185,7 +187,7 @@ func parseBody(data string) (string, bool) {
     return string(buf), true
 }
 
-func parseAttachment(name string) ([]string, bool) {
+func parseAttachment(config *Config, name string) ([]string, bool) {
     var names []string
     var status bool
 
@@ -193,7 +195,7 @@ func parseAttachment(name string) ([]string, bool) {
         return names, true
     }
 
-    names = strings.Split(name, sep)
+    names = strings.Split(name, config.Sep)
     for i := 0; i < len(names); i++ {
         names[i], status = checkFile(names[i])
         if !status {
@@ -204,10 +206,34 @@ func parseAttachment(name string) ([]string, bool) {
     return names, true
 }
 
+func parseConfig(name string) (Config, bool) {
+    var config Config
+
+    fi, err := os.Open(name)
+    if err != nil {
+        return config, false
+    }
+
+    defer fi.Close()
+
+    buf, _ := ioutil.ReadAll(fi)
+    err = json.Unmarshal(buf, &config)
+    if err != nil {
+        return config, false
+    }
+
+    return config, true
+}
+
 func main() {
     kingpin.MustParse(app.Parse(os.Args[1:]))
 
-    attachment, validAttachment := parseAttachment(*attachment)
+    config, validConfig := parseConfig(*config)
+    if !validConfig {
+        log.Fatal("Invalid config")
+    }
+
+    attachment, validAttachment := parseAttachment(&config, *attachment)
     if !validAttachment {
         log.Fatal("Invalid attachment")
     }
@@ -219,7 +245,7 @@ func main() {
         log.Fatal("Invalid content_type")
     }
 
-    to, cc := parseRecipients(*recipients)
+    to, cc := parseRecipients(&config, *recipients)
 
     mail := Mail {
         attachment,
@@ -231,7 +257,7 @@ func main() {
         to,
     }
 
-    status := sendMail(&mail)
+    status := sendMail(&config, &mail)
     if !status {
         log.Fatal("Failed to send mail")
     }

@@ -31,6 +31,11 @@ func TestCheckFile(t *testing.T) {
 }
 
 func TestSendMail(t *testing.T) {
+    config, valid := parseConfig("../config.json")
+    if !valid {
+        t.Error("FAIL")
+    }
+
     mail := Mail {
         []string {"../test/attach1.txt", "../test/attach2.text"},
         "../test/body.txt",
@@ -41,7 +46,7 @@ func TestSendMail(t *testing.T) {
         []string {"alen@example.com, bob@example.com"},
     }
 
-    sendMail(&mail)
+    sendMail(&config, &mail)
 }
 
 func TestCollectDifference(t *testing.T) {
@@ -75,8 +80,14 @@ func TestRemoveDuplicates(t *testing.T) {
 }
 
 func TestParseRecipients(t *testing.T) {
+    config, valid := parseConfig("../config.json")
+    if !valid {
+        t.Error("FAIL")
+    }
+
     recipients := "alen@example.com,cc:bob@example.com"
-    parseRecipients(recipients)
+
+    parseRecipients(&config, recipients)
 }
 
 func TestParseContentType(t *testing.T) {
@@ -108,15 +119,26 @@ func TestParseBody(t *testing.T) {
 }
 
 func TestParseAttachment(t *testing.T) {
-    if _, valid := parseAttachment(""); !valid {
+    config, valid := parseConfig("../config.json")
+    if !valid {
         t.Error("FAIL")
     }
 
-    if _, valid := parseAttachment("attach1.txt,attach2.txt"); valid {
+    if _, valid := parseAttachment(&config, ""); !valid {
         t.Error("FAIL")
     }
 
-    if _, valid := parseAttachment("../test/attach1.txt,../test/attach2.txt"); !valid {
+    if _, valid := parseAttachment(&config, "attach1.txt,attach2.txt"); valid {
+        t.Error("FAIL")
+    }
+
+    if _, valid := parseAttachment(&config, "../test/attach1.txt,../test/attach2.txt"); !valid {
+        t.Error("FAIL")
+    }
+}
+
+func TestParseConfig(t *testing.T) {
+    if _, valid := parseConfig("../config.json"); !valid {
         t.Error("FAIL")
     }
 }
