@@ -245,7 +245,7 @@ func main() {
         log.Fatal("Invalid content_type")
     }
 
-    to, cc := parseRecipients(&config, *recipients)
+    cc, to := parseRecipients(&config, *recipients)
 
     mail := Mail {
         attachment,
