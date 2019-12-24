@@ -150,10 +150,12 @@ func parseRecipients(config *Config, data string) ([]string, []string) {
 
     buf := strings.Split(data, config.Sep)
     for _, item := range buf {
-        if hasPrefix := strings.HasPrefix(item, "cc:"); hasPrefix {
-            cc = append(cc, strings.ReplaceAll(item, "cc:", ""))
-        } else {
-            to = append(to, item)
+        if len(item) != 0 {
+            if hasPrefix := strings.HasPrefix(item, "cc:"); hasPrefix {
+                cc = append(cc, strings.ReplaceAll(item, "cc:", ""))
+            } else {
+                to = append(to, item)
+            }
         }
     }
 
