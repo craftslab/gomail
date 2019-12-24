@@ -26,7 +26,7 @@ import (
 
 const (
     author  = "Jia Jia"
-    version = "1.0.0"
+    version = "1.2.0"
 )
 
 type Config struct {
@@ -152,7 +152,10 @@ func parseRecipients(config *Config, data string) ([]string, []string) {
     for _, item := range buf {
         if len(item) != 0 {
             if hasPrefix := strings.HasPrefix(item, "cc:"); hasPrefix {
-                cc = append(cc, strings.ReplaceAll(item, "cc:", ""))
+                buf := strings.ReplaceAll(item, "cc:", "")
+                if len(buf) != 0 {
+                    cc = append(cc, buf)
+                }
             } else {
                 to = append(to, item)
             }

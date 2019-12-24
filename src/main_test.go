@@ -85,7 +85,7 @@ func TestParseRecipients(t *testing.T) {
         t.Error("FAIL")
     }
 
-    recipients := "alen@example.com,cc:bob@example.com,"
+    recipients := "alen@example.com,cc:,cc:bob@example.com,"
 
     parseRecipients(&config, recipients)
 }
