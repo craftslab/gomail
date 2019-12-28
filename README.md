@@ -32,6 +32,11 @@ mailsender \
   --header "HEADER" \
   --recipients "alen@example.com,bob@example.com,cc:catherine@example.com" \
   --title "TITLE"
+
+recipientparser \
+  --config "config/parser.json" \
+  --filter "@example1.com,@example2.com" \
+  --recipients "alen,cc:bob@example.com"
 ```
 
 
