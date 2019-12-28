@@ -25,7 +25,7 @@
 
 ```
 mailsender \
-  --config "config.json" \
+  --config "config/sender.json" \
   --attachment "attach1.txt,attach2.text" \
   --body "body.txt" \
   --content_type "PLAIN_TEXT" \

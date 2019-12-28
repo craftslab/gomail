@@ -21,6 +21,6 @@ matrix:
       script:
         - cd $TRAVIS_BUILD_DIR/
         - golangci-lint run
-        - go test -cover -v src/main.go src/main_test.go
-        - CGO_ENABLED=0 GOARCH=amd64 GOOS=linux go build -ldflags="-s -w" -o bin/mailsender src/main.go
-        - CGO_ENABLED=0 GOARCH=amd64 GOOS=windows go build -ldflags="-s -w" -o bin/mailsender.exe src/main.go
+        - go test -cover -v src/sender.go src/sender_test.go
+        - CGO_ENABLED=0 GOARCH=amd64 GOOS=linux go build -ldflags="-s -w" -o bin/mailsender src/sender.go
+        - CGO_ENABLED=0 GOARCH=amd64 GOOS=windows go build -ldflags="-s -w" -o bin/mailsender.exe src/sender.go

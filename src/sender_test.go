@@ -31,7 +31,7 @@ func TestCheckFile(t *testing.T) {
 }
 
 func TestSendMail(t *testing.T) {
-    config, valid := parseConfig("../config.json")
+    config, valid := parseConfig("../config/sender.json")
     if !valid {
         t.Error("FAIL")
     }
@@ -51,9 +51,12 @@ func TestSendMail(t *testing.T) {
 
 func TestCollectDifference(t *testing.T) {
     bufA := []string {"alen@example.com", "bob@example.com"}
-    bufB := []string {"alen@example.com", "catherine@example.com"}
+    bufB := []string {"alen@example.com"}
 
-    _ = collectDifference(bufA, bufB)
+    buf := collectDifference(bufA, bufB)
+    if len(buf) != 1 {
+        t.Error("FAIL")
+    }
 }
 
 func checkDuplicates(data []string) bool {
@@ -80,14 +83,17 @@ func TestRemoveDuplicates(t *testing.T) {
 }
 
 func TestParseRecipients(t *testing.T) {
-    config, valid := parseConfig("../config.json")
+    config, valid := parseConfig("../config/sender.json")
     if !valid {
         t.Error("FAIL")
     }
 
     recipients := "alen@example.com,cc:,cc:bob@example.com,"
 
-    parseRecipients(&config, recipients)
+    cc, to := parseRecipients(&config, recipients)
+    if len(cc) == 0 || len(to) == 0 {
+        t.Error("FAIL")
+    }
 }
 
 func TestParseContentType(t *testing.T) {
@@ -119,7 +125,7 @@ func TestParseBody(t *testing.T) {
 }
 
 func TestParseAttachment(t *testing.T) {
-    config, valid := parseConfig("../config.json")
+    config, valid := parseConfig("../config/sender.json")
     if !valid {
         t.Error("FAIL")
     }
@@ -138,7 +144,7 @@ func TestParseAttachment(t *testing.T) {
 }
 
 func TestParseConfig(t *testing.T) {
-    if _, valid := parseConfig("../config.json"); !valid {
+    if _, valid := parseConfig("../config/sender.json"); !valid {
         t.Error("FAIL")
     }
 }
