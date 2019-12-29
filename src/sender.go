@@ -181,7 +181,7 @@ func parseContentType(data string) (string, bool) {
 func parseBody(data string) (string, bool) {
     _name, status := checkFile(data)
     if !status {
-        return data, false
+        return data, true
     }
 
     buf, err := ioutil.ReadFile(_name)
@@ -243,7 +243,10 @@ func main() {
         log.Fatal("Invalid attachment")
     }
 
-    body, _ := parseBody(*body)
+    body, validBody := parseBody(*body)
+    if !validBody {
+        log.Fatal("Invalid body")
+    }
 
     contentType, validContentType := parseContentType(*contentType)
     if !validContentType {
@@ -251,6 +254,9 @@ func main() {
     }
 
     cc, to := parseRecipients(&config, *recipients)
+    if len(cc) == 0 && len(to) == 0 {
+        log.Fatal("Invalid recipients")
+    }
 
     mail := Mail {
         attachment,

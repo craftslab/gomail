@@ -111,11 +111,15 @@ func TestParseContentType(t *testing.T) {
 }
 
 func TestParseBody(t *testing.T) {
-    if _, valid := parseBody(""); valid {
+    if _, valid := parseBody(""); !valid {
         t.Error("FAIL")
     }
 
-    if _, valid := parseBody("body.txt"); valid {
+    if _, valid := parseBody("body"); !valid {
+        t.Error("FAIL")
+    }
+
+    if _, valid := parseBody("body.txt"); !valid {
         t.Error("FAIL")
     }
 
