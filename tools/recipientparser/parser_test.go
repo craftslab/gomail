@@ -80,9 +80,7 @@ func TestQueryLdap(t *testing.T) {
 }
 
 func TestParseId(t *testing.T) {
-    var id string
-
-    id = parseId("alen10000001")
+    id := parseId("alen10000001")
     if id != "10000001" {
         t.Error("FAIL")
     }

@@ -20,6 +20,7 @@ import (
     "log"
     "os"
     "strings"
+    "unicode"
 
     "github.com/go-ldap/ldap/v3"
     "gopkg.in/alecthomas/kingpin.v2"
@@ -150,12 +151,21 @@ func queryLdap(config *Config, data string) (string, bool) {
         return "", false
     }
 
+    // TODO
     return "", true
 }
 
 func parseId(data string) string {
-    // TODO
-    return data
+    f := func(c rune) bool {
+        return !unicode.IsNumber(c)
+    }
+
+    buf := strings.FieldsFunc(data, f)
+    if len(buf) != 1 {
+        return ""
+    }
+
+    return buf[0]
 }
 
 func fetchAddress(config *Config, data []string) ([]string, bool) {
@@ -167,11 +177,13 @@ func fetchAddress(config *Config, data []string) ([]string, bool) {
         if found := strings.Contains(item, "@"); found {
             buf = append(buf, item)
         } else {
-            if address, status = queryLdap(config, parseId(item)); !status {
-                break
-            }
-            if len(address) != 0 {
-                buf = append(buf, address)
+            if id := parseId(item); len(id) != 0 {
+                if address, status = queryLdap(config, id); !status {
+                    break
+                }
+                if len(address) != 0 {
+                    buf = append(buf, address)
+                }
             }
         }
     }
@@ -256,6 +268,9 @@ func main() {
     }
 
     cc, to := parseRecipients(&config, *recipients)
+    if len(cc) == 0 && len(to) == 0 {
+        log.Fatal("Invalid recipients")
+    }
 
     cc, validCc := fetchAddress(&config, cc)
     if !validCc {
