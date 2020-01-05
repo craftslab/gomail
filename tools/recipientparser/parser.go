@@ -23,6 +23,7 @@ import (
     "unicode"
 
     "github.com/go-ldap/ldap/v3"
+    "github.com/pkg/errors"
     "gopkg.in/alecthomas/kingpin.v2"
 )
 
@@ -81,17 +82,17 @@ func removeDuplicates(data []string) []string {
     return buf
 }
 
-func filterAddress(data string, filter []string) bool {
-    status := false
+func filterAddress(data string, filter []string) error {
+    err := errors.New("filter failed")
 
     for _, item := range filter {
         if endsWith := strings.HasSuffix(data, item); endsWith {
-            status = true
+            err = nil
             break
         }
     }
 
-    return status
+    return err
 }
 
 func printAddress(cc []string, to []string, filter []string) {
@@ -100,38 +101,36 @@ func printAddress(cc []string, to []string, filter []string) {
     cc = collectDifference(cc, to)
 
     for _, item := range to {
-        if status := filterAddress(item, filter); status {
+        if err := filterAddress(item, filter); err == nil {
             fmt.Printf("%s,", item)
         }
     }
 
     for index := 0; index < len(cc)-1; index++ {
-        if status := filterAddress(cc[index], filter); status {
+        if err := filterAddress(cc[index], filter); err == nil {
             fmt.Printf("cc:%s,", cc[index])
         }
     }
 
-    if status := filterAddress(cc[len(cc)-1], filter); status {
+    if err := filterAddress(cc[len(cc)-1], filter); err == nil {
         fmt.Printf("cc:%s\n", cc[len(cc)-1])
     }
 }
 
-func queryLdap(config *Config, data string) (string, bool) {
+func queryLdap(config *Config, data string) (string, error) {
     l, err := ldap.Dial("tcp", fmt.Sprintf("%s:%d", config.Host, config.Port))
     if err != nil {
-        return "", false
+        return "", errors.Wrap(err, "dial failed")
     }
 
     defer l.Close()
 
-    err = l.StartTLS(&tls.Config{InsecureSkipVerify: true})
-    if err != nil {
-        return "", false
+    if err = l.StartTLS(&tls.Config{InsecureSkipVerify: true}); err != nil {
+        return "", errors.Wrap(err, "start failed")
     }
 
-    err = l.Bind(config.User, config.Pass)
-    if err != nil {
-        return "", false
+    if err = l.Bind(config.User, config.Pass); err != nil {
+        return "", errors.Wrap(err, "bind failed")
     }
 
     searchRequest := ldap.NewSearchRequest(
@@ -144,15 +143,15 @@ func queryLdap(config *Config, data string) (string, bool) {
 
     result, err := l.Search(searchRequest)
     if err != nil {
-        return "", false
+        return "", errors.Wrap(err, "search failed")
     }
 
     if len(result.Entries) != 1 {
-        return "", false
+        return "", errors.New("result invalid")
     }
 
     // TODO
-    return "", true
+    return "", nil
 }
 
 func parseId(data string) string {
@@ -168,17 +167,17 @@ func parseId(data string) string {
     return buf[0]
 }
 
-func fetchAddress(config *Config, data []string) ([]string, bool) {
+func fetchAddress(config *Config, data []string) ([]string, error) {
     var address string
     var buf []string
-    status := true
+    var err error
 
     for _, item := range data {
         if found := strings.Contains(item, "@"); found {
             buf = append(buf, item)
         } else {
             if id := parseId(item); len(id) != 0 {
-                if address, status = queryLdap(config, id); !status {
+                if address, err = queryLdap(config, id); err != nil {
                     break
                 }
                 if len(address) != 0 {
@@ -188,7 +187,7 @@ func fetchAddress(config *Config, data []string) ([]string, bool) {
         }
     }
 
-    return buf, status
+    return buf, err
 }
 
 func parseRecipients(config *Config, data string) ([]string, []string) {
@@ -199,8 +198,7 @@ func parseRecipients(config *Config, data string) ([]string, []string) {
     for _, item := range buf {
         if len(item) != 0 {
             if hasPrefix := strings.HasPrefix(item, "cc:"); hasPrefix {
-                buf := strings.ReplaceAll(item, "cc:", "")
-                if len(buf) != 0 {
+                if buf := strings.ReplaceAll(item, "cc:", ""); len(buf) != 0 {
                     cc = append(cc, buf)
                 }
             } else {
@@ -216,11 +214,11 @@ func parseRecipients(config *Config, data string) ([]string, []string) {
     return cc, to
 }
 
-func parseFilter(config *Config, data string) ([]string, bool) {
+func parseFilter(config *Config, data string) ([]string, error) {
     var filter []string
 
     if len(data) == 0 {
-        return filter, true
+        return filter, nil
     }
 
     buf := strings.Split(data, config.Sep)
@@ -232,38 +230,37 @@ func parseFilter(config *Config, data string) ([]string, bool) {
 
     filter = removeDuplicates(filter)
 
-    return filter, true
+    return filter, nil
 }
 
-func parseConfig(name string) (Config, bool) {
+func parseConfig(name string) (Config, error) {
     var config Config
 
     fi, err := os.Open(name)
     if err != nil {
-        return config, false
+        return config, errors.Wrap(err, "open failed")
     }
 
     defer fi.Close()
 
     buf, _ := ioutil.ReadAll(fi)
-    err = json.Unmarshal(buf, &config)
-    if err != nil {
-        return config, false
+    if err = json.Unmarshal(buf, &config); err != nil {
+        return config, errors.Wrap(err, "unmarshal failed")
     }
 
-    return config, true
+    return config, nil
 }
 
 func main() {
     kingpin.MustParse(app.Parse(os.Args[1:]))
 
-    config, validConfig := parseConfig(*config)
-    if !validConfig {
+    config, err := parseConfig(*config)
+    if err != nil {
         log.Fatal("Invalid config")
     }
 
-    filter, validFilter := parseFilter(&config, *filter)
-    if !validFilter {
+    filter, err := parseFilter(&config, *filter)
+    if err != nil {
         log.Fatal("Invalid filter")
     }
 
@@ -272,13 +269,13 @@ func main() {
         log.Fatal("Invalid recipients")
     }
 
-    cc, validCc := fetchAddress(&config, cc)
-    if !validCc {
+    cc, err = fetchAddress(&config, cc)
+    if err != nil {
         log.Fatal("Failed to fetch cc address")
     }
 
-    to, validTo := fetchAddress(&config, to)
-    if !validTo {
+    to, err = fetchAddress(&config, to)
+    if err != nil {
         log.Fatal("Failed to fetch to address")
     }
 

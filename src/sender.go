@@ -20,6 +20,7 @@ import (
     "path/filepath"
     "strings"
 
+    "github.com/pkg/errors"
     "gopkg.in/alecthomas/kingpin.v2"
     "gopkg.in/gomail.v2"
 )
@@ -68,7 +69,7 @@ var (
     title = app.Flag("title", "Title text").Short('t').String()
 )
 
-func checkFile(name string) (string, bool) {
+func checkFile(name string) (string, error) {
     buf := name
 
     fi, err := os.Lstat(name)
@@ -77,19 +78,19 @@ func checkFile(name string) (string, bool) {
         fullname := filepath.Join(root, name)
         fi, err = os.Lstat(fullname)
         if err != nil {
-            return buf, false
+            return buf, errors.Wrap(err, "lstat failed")
         }
         buf = fullname
     }
 
     if fi == nil || !fi.Mode().IsRegular() {
-        return buf, false
+        return buf, errors.New("file invalid")
     }
 
-    return buf, true
+    return buf, nil
 }
 
-func sendMail(config *Config, data *Mail) bool {
+func sendMail(config *Config, data *Mail) error {
     msg := gomail.NewMessage()
 
     msg.SetAddressHeader("From", config.Sender, data.From)
@@ -105,10 +106,10 @@ func sendMail(config *Config, data *Mail) bool {
     dialer := gomail.NewDialer(config.Host, config.Port, config.User, config.Pass)
 
     if err := dialer.DialAndSend(msg); err != nil {
-        return false
+        return errors.Wrap(err, "send failed")
     }
 
-    return true
+    return nil
 }
 
 func collectDifference(data []string, other []string) []string {
@@ -169,87 +170,86 @@ func parseRecipients(config *Config, data string) ([]string, []string) {
     return cc, to
 }
 
-func parseContentType(data string) (string, bool) {
+func parseContentType(data string) (string, error) {
     buf, isPresent := contentTypeMap[data]
     if !isPresent {
-        return "", false
+        return "", errors.New("content type invalid")
     }
 
-    return buf, true
+    return buf, nil
 }
 
-func parseBody(data string) (string, bool) {
-    _name, status := checkFile(data)
-    if !status {
-        return data, true
+func parseBody(data string) (string, error) {
+    _name, err := checkFile(data)
+    if err != nil {
+        return data, nil
     }
 
     buf, err := ioutil.ReadFile(_name)
     if err != nil {
-        return data, false
+        return data, errors.Wrap(err, "read failed")
     }
 
-    return string(buf), true
+    return string(buf), nil
 }
 
-func parseAttachment(config *Config, name string) ([]string, bool) {
+func parseAttachment(config *Config, name string) ([]string, error) {
+    var err error
     var names []string
-    var status bool
 
     if len(name) == 0 {
-        return names, true
+        return names, nil
     }
 
     names = strings.Split(name, config.Sep)
     for i := 0; i < len(names); i++ {
-        names[i], status = checkFile(names[i])
-        if !status {
-            return nil, false
+        names[i], err = checkFile(names[i])
+        if err != nil {
+            return nil, err
         }
     }
 
-    return names, true
+    return names, nil
 }
 
-func parseConfig(name string) (Config, bool) {
+func parseConfig(name string) (Config, error) {
     var config Config
 
     fi, err := os.Open(name)
     if err != nil {
-        return config, false
+        return config, errors.Wrap(err, "open failed")
     }
 
     defer fi.Close()
 
     buf, _ := ioutil.ReadAll(fi)
-    err = json.Unmarshal(buf, &config)
-    if err != nil {
-        return config, false
+    if err := json.Unmarshal(buf, &config); err != nil {
+        return config, errors.Wrap(err, "unmarshal failed")
     }
 
-    return config, true
+    return config, nil
 }
 
 func main() {
     kingpin.MustParse(app.Parse(os.Args[1:]))
 
-    config, validConfig := parseConfig(*config)
-    if !validConfig {
+    config, err := parseConfig(*config)
+    if err != nil {
         log.Fatal("Invalid config")
     }
 
-    attachment, validAttachment := parseAttachment(&config, *attachment)
-    if !validAttachment {
+    attachment, err := parseAttachment(&config, *attachment)
+    if err != nil {
         log.Fatal("Invalid attachment")
     }
 
-    body, validBody := parseBody(*body)
-    if !validBody {
+    body, err := parseBody(*body)
+    if err != nil {
         log.Fatal("Invalid body")
     }
 
-    contentType, validContentType := parseContentType(*contentType)
-    if !validContentType {
+    contentType, err := parseContentType(*contentType)
+    if err != nil {
         log.Fatal("Invalid content_type")
     }
 
@@ -268,8 +268,7 @@ func main() {
         to,
     }
 
-    status := sendMail(&config, &mail)
-    if !status {
+    if err := sendMail(&config, &mail); err != nil {
         log.Fatal("Failed to send mail")
     }
 

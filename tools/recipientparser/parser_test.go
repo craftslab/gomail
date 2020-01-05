@@ -20,8 +20,7 @@ func TestCollectDifference(t *testing.T) {
     bufA := []string {"alen@example.com", "bob@example.com"}
     bufB := []string {"alen@example.com"}
 
-    buf := collectDifference(bufA, bufB)
-    if len(buf) != 1 {
+    if buf := collectDifference(bufA, bufB); len(buf) != 1 {
         t.Error("FAIL")
     }
 }
@@ -53,7 +52,7 @@ func TestFilterAddress(t *testing.T) {
     address := "alen@example.com"
     filter := []string {"@example.com"}
 
-    if status := filterAddress(address, filter); !status {
+    if err := filterAddress(address, filter); err != nil {
         t.Error("FAIL")
     }
 }
@@ -67,12 +66,12 @@ func TestPrintAddress(t *testing.T) {
 }
 
 func TestQueryLdap(t *testing.T) {
-    config, valid := parseConfig("../../config/parser.json")
-    if !valid {
+    config, err := parseConfig("../../config/parser.json")
+    if err != nil {
         t.Error("FAIL")
     }
 
-    if address, status := queryLdap(&config, parseId("alen10000001")); !status {
+    if address, err := queryLdap(&config, parseId("alen10000001")); err != nil {
        if len(address) != 0 {
            t.Error("FAIL")
        }
@@ -80,34 +79,31 @@ func TestQueryLdap(t *testing.T) {
 }
 
 func TestParseId(t *testing.T) {
-    id := parseId("alen10000001")
-    if id != "10000001" {
+    if id := parseId("alen10000001"); id != "10000001" {
         t.Error("FAIL")
     }
 
-    id = parseId("alen00000000")
-    if id != "00000000" {
+    if id := parseId("alen00000000"); id != "00000000" {
         t.Error("FAIL")
     }
 }
 
 func TestFetchAddress(t *testing.T) {
-    config, valid := parseConfig("../../config/parser.json")
-    if !valid {
+    config, err := parseConfig("../../config/parser.json")
+    if err != nil {
         t.Error("FAIL")
     }
 
     recipients := []string {"alen@example", "bob"}
 
-    address, _ := fetchAddress(&config, recipients)
-    if len(address) < 1 {
+    if address, _ := fetchAddress(&config, recipients); len(address) < 1 {
         t.Error("FAIL")
     }
 }
 
 func TestParseRecipients(t *testing.T) {
-    config, valid := parseConfig("../../config/parser.json")
-    if !valid {
+    config, err := parseConfig("../../config/parser.json")
+    if err != nil {
         t.Error("FAIL")
     }
 
@@ -120,20 +116,20 @@ func TestParseRecipients(t *testing.T) {
 }
 
 func TestParseFilter(t *testing.T) {
-    config, valid := parseConfig("../../config/parser.json")
-    if !valid {
+    config, err := parseConfig("../../config/parser.json")
+    if err != nil {
         t.Error("FAIL")
     }
 
     filter := "alen@example.com,,bob@example.com,"
 
-    if _, valid := parseFilter(&config, filter); !valid {
+    if _, err := parseFilter(&config, filter); err != nil {
         t.Error("FAIL")
     }
 }
 
 func TestParseConfig(t *testing.T) {
-    if _, valid := parseConfig("../../config/parser.json"); !valid {
+    if _, err := parseConfig("../../config/parser.json"); err != nil {
         t.Error("FAIL")
     }
 }

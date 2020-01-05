@@ -17,22 +17,22 @@ import (
 )
 
 func TestCheckFile(t *testing.T) {
-    if _, valid := checkFile("body.txt"); valid {
+    if _, err := checkFile("body.txt"); err == nil {
         t.Error("FAIL")
     }
 
-    if _, valid := checkFile("test"); valid {
+    if _, err := checkFile("test"); err == nil {
         t.Error("FAIL")
     }
 
-    if _, valid := checkFile("../test/body.txt"); !valid {
+    if _, err := checkFile("../test/body.txt"); err != nil {
         t.Error("FAIL")
     }
 }
 
 func TestSendMail(t *testing.T) {
-    config, valid := parseConfig("../config/sender.json")
-    if !valid {
+    config, err := parseConfig("../config/sender.json")
+    if err != nil {
         t.Error("FAIL")
     }
 
@@ -46,15 +46,14 @@ func TestSendMail(t *testing.T) {
         []string {"alen@example.com, bob@example.com"},
     }
 
-    sendMail(&config, &mail)
+    _ = sendMail(&config, &mail)
 }
 
 func TestCollectDifference(t *testing.T) {
     bufA := []string {"alen@example.com", "bob@example.com"}
     bufB := []string {"alen@example.com"}
 
-    buf := collectDifference(bufA, bufB)
-    if len(buf) != 1 {
+    if buf := collectDifference(bufA, bufB); len(buf) != 1 {
         t.Error("FAIL")
     }
 }
@@ -83,8 +82,8 @@ func TestRemoveDuplicates(t *testing.T) {
 }
 
 func TestParseRecipients(t *testing.T) {
-    config, valid := parseConfig("../config/sender.json")
-    if !valid {
+    config, err := parseConfig("../config/sender.json")
+    if err != nil {
         t.Error("FAIL")
     }
 
@@ -97,58 +96,58 @@ func TestParseRecipients(t *testing.T) {
 }
 
 func TestParseContentType(t *testing.T) {
-    if _, valid := parseContentType("FOO"); valid {
+    if _, err := parseContentType("FOO"); err == nil {
         t.Error("FAIL")
     }
 
-    if _, valid := parseContentType("HTML"); !valid {
+    if _, err := parseContentType("HTML"); err != nil {
         t.Error("FAIL")
     }
 
-    if _, valid := parseContentType("PLAIN_TEXT"); !valid {
+    if _, err := parseContentType("PLAIN_TEXT"); err != nil {
         t.Error("FAIL")
     }
 }
 
 func TestParseBody(t *testing.T) {
-    if _, valid := parseBody(""); !valid {
+    if _, err := parseBody(""); err != nil {
         t.Error("FAIL")
     }
 
-    if _, valid := parseBody("body"); !valid {
+    if _, err := parseBody("body"); err != nil {
         t.Error("FAIL")
     }
 
-    if _, valid := parseBody("body.txt"); !valid {
+    if _, err := parseBody("body.txt"); err != nil {
         t.Error("FAIL")
     }
 
-    if _, valid := parseBody("../test/body.txt"); !valid {
+    if _, err := parseBody("../test/body.txt"); err != nil {
         t.Error("FAIL")
     }
 }
 
 func TestParseAttachment(t *testing.T) {
-    config, valid := parseConfig("../config/sender.json")
-    if !valid {
+    config, err := parseConfig("../config/sender.json")
+    if err != nil {
         t.Error("FAIL")
     }
 
-    if _, valid := parseAttachment(&config, ""); !valid {
+    if _, err := parseAttachment(&config, ""); err != nil {
         t.Error("FAIL")
     }
 
-    if _, valid := parseAttachment(&config, "attach1.txt,attach2.txt"); valid {
+    if _, err := parseAttachment(&config, "attach1.txt,attach2.txt"); err == nil {
         t.Error("FAIL")
     }
 
-    if _, valid := parseAttachment(&config, "../test/attach1.txt,../test/attach2.txt"); !valid {
+    if _, err := parseAttachment(&config, "../test/attach1.txt,../test/attach2.txt"); err != nil {
         t.Error("FAIL")
     }
 }
 
 func TestParseConfig(t *testing.T) {
-    if _, valid := parseConfig("../config/sender.json"); !valid {
+    if _, err := parseConfig("../config/sender.json"); err != nil {
         t.Error("FAIL")
     }
 }
