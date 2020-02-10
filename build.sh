@@ -6,7 +6,7 @@ CGO_ENABLED=0 GOARCH=amd64 GOOS=linux go build -ldflags="-s -w" -o bin/mailsende
 CGO_ENABLED=0 GOARCH=amd64 GOOS=linux go build -ldflags="-s -w" -o bin/recipientparser tools/recipientparser/parser.go
 
 CGO_ENABLED=0 GOARCH=amd64 GOOS=windows go build -ldflags="-s -w" -o bin/mailsender.exe src/sender.go
-CGO_ENABLED=0 GOARCH=amd64 GOOS=windows go build -ldflags="-s -w" -o bin/recipientparser tools/recipientparser/parser.go
+CGO_ENABLED=0 GOARCH=amd64 GOOS=windows go build -ldflags="-s -w" -o bin/recipientparser.exe tools/recipientparser/parser.go
 
 apt install upx
 

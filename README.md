@@ -23,7 +23,7 @@
 
 ## Examples
 
-```
+```bash
 mailsender \
   --config "config/sender.json" \
   --attachment "attach1.txt,attach2.text" \
