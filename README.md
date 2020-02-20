@@ -16,6 +16,7 @@
 ## Features
 
 *Mail Sender* supports:
+
 - Attachments
 - HTML and text templates
 
@@ -25,18 +26,18 @@
 
 ```bash
 mailsender \
-  --config "config/sender.json" \
-  --attachment "attach1.txt,attach2.text" \
-  --body "body.txt" \
-  --content_type "PLAIN_TEXT" \
-  --header "HEADER" \
-  --recipients "alen@example.com,bob@example.com,cc:catherine@example.com" \
-  --title "TITLE"
+  --config="config/sender.json" \
+  --attachment="attach1.txt,attach2.text" \
+  --body="body.txt" \
+  --content_type="PLAIN_TEXT" \
+  --header="HEADER" \
+  --recipients="alen@example.com,bob@example.com,cc:catherine@example.com" \
+  --title="TITLE"
 
 recipientparser \
-  --config "config/parser.json" \
-  --filter "@example1.com,@example2.com" \
-  --recipients "alen,cc:bob@example.com"
+  --config="config/parser.json" \
+  --filter="@example1.com,@example2.com" \
+  --recipients="alen,cc:bob@example.com"
 ```
 
 
