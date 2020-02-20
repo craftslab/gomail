@@ -13,273 +13,273 @@
 package main
 
 import (
-    "crypto/tls"
-    "encoding/json"
-    "fmt"
-    "io/ioutil"
-    "log"
-    "os"
-    "strings"
-    "unicode"
+	"crypto/tls"
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
+	"log"
+	"os"
+	"strings"
+	"unicode"
 
-    "github.com/go-ldap/ldap/v3"
-    "github.com/pkg/errors"
-    "gopkg.in/alecthomas/kingpin.v2"
+	"github.com/go-ldap/ldap/v3"
+	"github.com/pkg/errors"
+	"gopkg.in/alecthomas/kingpin.v2"
 )
 
 const (
-    author  = "Jia Jia"
-    version = "2.0.0"
+	author  = "Jia Jia"
+	version = "2.0.0"
 )
 
 type Config struct {
-    Base string `json:"base"`
-    Host string `json:"host"`
-    Pass string `json:"pass"`
-    Port int `json:"port"`
-    Sep string `json:"sep"`
-    User string `json:"user"`
+	Base string `json:"base"`
+	Host string `json:"host"`
+	Pass string `json:"pass"`
+	Port int    `json:"port"`
+	Sep  string `json:"sep"`
+	User string `json:"user"`
 }
 
 var (
-    app = kingpin.New("recipientparser", "Recipient parser written in Go").Author(author).Version(version)
+	app = kingpin.New("recipientparser", "Recipient parser written in Go").Author(author).Version(version)
 
-    config = app.Flag("config", "Config file, format: .json").Short('c').String()
-    filter = app.Flag("filter", "Filter list, format: @example1.com,@example2.com").Short('f').String()
-    recipients = app.Flag("recipients", "Recipients list, format: alen,cc:bob@example.com").Short('r').Required().String()
+	config     = app.Flag("config", "Config file, format: .json").Short('c').String()
+	filter     = app.Flag("filter", "Filter list, format: @example1.com,@example2.com").Short('f').String()
+	recipients = app.Flag("recipients", "Recipients list, format: alen,cc:bob@example.com").Short('r').Required().String()
 )
 
 func collectDifference(data []string, other []string) []string {
-    var buf []string
-    key := make(map[string]bool)
+	var buf []string
+	key := make(map[string]bool)
 
-    for _, item := range other {
-        if _, isPresent := key[item]; !isPresent {
-            key[item] = true
-        }
-    }
+	for _, item := range other {
+		if _, isPresent := key[item]; !isPresent {
+			key[item] = true
+		}
+	}
 
-    for _, item := range data {
-        if _, isPresent := key[item]; !isPresent {
-            buf = append(buf, item)
-        }
-    }
+	for _, item := range data {
+		if _, isPresent := key[item]; !isPresent {
+			buf = append(buf, item)
+		}
+	}
 
-    return buf
+	return buf
 }
 
 func removeDuplicates(data []string) []string {
-    var buf []string
-    key := make(map[string]bool)
+	var buf []string
+	key := make(map[string]bool)
 
-    for _, item := range data {
-        if _, isPresent := key[item]; !isPresent {
-            key[item] = true
-            buf = append(buf, item)
-        }
-    }
+	for _, item := range data {
+		if _, isPresent := key[item]; !isPresent {
+			key[item] = true
+			buf = append(buf, item)
+		}
+	}
 
-    return buf
+	return buf
 }
 
 func filterAddress(data string, filter []string) error {
-    err := errors.New("filter failed")
+	err := errors.New("filter failed")
 
-    for _, item := range filter {
-        if endsWith := strings.HasSuffix(data, item); endsWith {
-            err = nil
-            break
-        }
-    }
+	for _, item := range filter {
+		if endsWith := strings.HasSuffix(data, item); endsWith {
+			err = nil
+			break
+		}
+	}
 
-    return err
+	return err
 }
 
 func printAddress(cc []string, to []string, filter []string) {
-    cc = removeDuplicates(cc)
-    to = removeDuplicates(to)
-    cc = collectDifference(cc, to)
+	cc = removeDuplicates(cc)
+	to = removeDuplicates(to)
+	cc = collectDifference(cc, to)
 
-    for _, item := range to {
-        if err := filterAddress(item, filter); err == nil {
-            fmt.Printf("%s,", item)
-        }
-    }
+	for _, item := range to {
+		if err := filterAddress(item, filter); err == nil {
+			fmt.Printf("%s,", item)
+		}
+	}
 
-    for index := 0; index < len(cc)-1; index++ {
-        if err := filterAddress(cc[index], filter); err == nil {
-            fmt.Printf("cc:%s,", cc[index])
-        }
-    }
+	for index := 0; index < len(cc)-1; index++ {
+		if err := filterAddress(cc[index], filter); err == nil {
+			fmt.Printf("cc:%s,", cc[index])
+		}
+	}
 
-    if err := filterAddress(cc[len(cc)-1], filter); err == nil {
-        fmt.Printf("cc:%s\n", cc[len(cc)-1])
-    }
+	if err := filterAddress(cc[len(cc)-1], filter); err == nil {
+		fmt.Printf("cc:%s\n", cc[len(cc)-1])
+	}
 }
 
 func queryLdap(config *Config, data string) (string, error) {
-    l, err := ldap.Dial("tcp", fmt.Sprintf("%s:%d", config.Host, config.Port))
-    if err != nil {
-        return "", errors.Wrap(err, "dial failed")
-    }
+	l, err := ldap.Dial("tcp", fmt.Sprintf("%s:%d", config.Host, config.Port))
+	if err != nil {
+		return "", errors.Wrap(err, "dial failed")
+	}
 
-    defer l.Close()
+	defer l.Close()
 
-    if err = l.StartTLS(&tls.Config{InsecureSkipVerify: true}); err != nil {
-        return "", errors.Wrap(err, "start failed")
-    }
+	if err = l.StartTLS(&tls.Config{InsecureSkipVerify: true}); err != nil {
+		return "", errors.Wrap(err, "start failed")
+	}
 
-    if err = l.Bind(config.User, config.Pass); err != nil {
-        return "", errors.Wrap(err, "bind failed")
-    }
+	if err = l.Bind(config.User, config.Pass); err != nil {
+		return "", errors.Wrap(err, "bind failed")
+	}
 
-    searchRequest := ldap.NewSearchRequest(
-        config.Base,
-        ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
-        fmt.Sprintf("(sAMAccountName=%s)", data),
-        []string{"*"},
-        nil,
-    )
+	searchRequest := ldap.NewSearchRequest(
+		config.Base,
+		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
+		fmt.Sprintf("(sAMAccountName=%s)", data),
+		[]string{"*"},
+		nil,
+	)
 
-    result, err := l.Search(searchRequest)
-    if err != nil {
-        return "", errors.Wrap(err, "search failed")
-    }
+	result, err := l.Search(searchRequest)
+	if err != nil {
+		return "", errors.Wrap(err, "search failed")
+	}
 
-    if len(result.Entries) != 1 {
-        return "", errors.New("result invalid")
-    }
+	if len(result.Entries) != 1 {
+		return "", errors.New("result invalid")
+	}
 
-    // TODO
-    return "", nil
+	// TODO
+	return "", nil
 }
 
 func parseId(data string) string {
-    f := func(c rune) bool {
-        return !unicode.IsNumber(c)
-    }
+	f := func(c rune) bool {
+		return !unicode.IsNumber(c)
+	}
 
-    buf := strings.FieldsFunc(data, f)
-    if len(buf) != 1 {
-        return ""
-    }
+	buf := strings.FieldsFunc(data, f)
+	if len(buf) != 1 {
+		return ""
+	}
 
-    return buf[0]
+	return buf[0]
 }
 
 func fetchAddress(config *Config, data []string) ([]string, error) {
-    var address string
-    var buf []string
-    var err error
+	var address string
+	var buf []string
+	var err error
 
-    for _, item := range data {
-        if found := strings.Contains(item, "@"); found {
-            buf = append(buf, item)
-        } else {
-            if id := parseId(item); len(id) != 0 {
-                if address, err = queryLdap(config, id); err != nil {
-                    break
-                }
-                if len(address) != 0 {
-                    buf = append(buf, address)
-                }
-            }
-        }
-    }
+	for _, item := range data {
+		if found := strings.Contains(item, "@"); found {
+			buf = append(buf, item)
+		} else {
+			if id := parseId(item); len(id) != 0 {
+				if address, err = queryLdap(config, id); err != nil {
+					break
+				}
+				if len(address) != 0 {
+					buf = append(buf, address)
+				}
+			}
+		}
+	}
 
-    return buf, err
+	return buf, err
 }
 
 func parseRecipients(config *Config, data string) ([]string, []string) {
-    var cc []string
-    var to []string
+	var cc []string
+	var to []string
 
-    buf := strings.Split(data, config.Sep)
-    for _, item := range buf {
-        if len(item) != 0 {
-            if hasPrefix := strings.HasPrefix(item, "cc:"); hasPrefix {
-                if buf := strings.ReplaceAll(item, "cc:", ""); len(buf) != 0 {
-                    cc = append(cc, buf)
-                }
-            } else {
-                to = append(to, item)
-            }
-        }
-    }
+	buf := strings.Split(data, config.Sep)
+	for _, item := range buf {
+		if len(item) != 0 {
+			if hasPrefix := strings.HasPrefix(item, "cc:"); hasPrefix {
+				if buf := strings.ReplaceAll(item, "cc:", ""); len(buf) != 0 {
+					cc = append(cc, buf)
+				}
+			} else {
+				to = append(to, item)
+			}
+		}
+	}
 
-    cc = removeDuplicates(cc)
-    to = removeDuplicates(to)
-    cc = collectDifference(cc, to)
+	cc = removeDuplicates(cc)
+	to = removeDuplicates(to)
+	cc = collectDifference(cc, to)
 
-    return cc, to
+	return cc, to
 }
 
 func parseFilter(config *Config, data string) ([]string, error) {
-    var filter []string
+	var filter []string
 
-    if len(data) == 0 {
-        return filter, nil
-    }
+	if len(data) == 0 {
+		return filter, nil
+	}
 
-    buf := strings.Split(data, config.Sep)
-    for _, item := range buf {
-        if len(item) != 0 {
-            filter = append(filter, item)
-        }
-    }
+	buf := strings.Split(data, config.Sep)
+	for _, item := range buf {
+		if len(item) != 0 {
+			filter = append(filter, item)
+		}
+	}
 
-    filter = removeDuplicates(filter)
+	filter = removeDuplicates(filter)
 
-    return filter, nil
+	return filter, nil
 }
 
 func parseConfig(name string) (Config, error) {
-    var config Config
+	var config Config
 
-    fi, err := os.Open(name)
-    if err != nil {
-        return config, errors.Wrap(err, "open failed")
-    }
+	fi, err := os.Open(name)
+	if err != nil {
+		return config, errors.Wrap(err, "open failed")
+	}
 
-    defer fi.Close()
+	defer fi.Close()
 
-    buf, _ := ioutil.ReadAll(fi)
-    if err = json.Unmarshal(buf, &config); err != nil {
-        return config, errors.Wrap(err, "unmarshal failed")
-    }
+	buf, _ := ioutil.ReadAll(fi)
+	if err = json.Unmarshal(buf, &config); err != nil {
+		return config, errors.Wrap(err, "unmarshal failed")
+	}
 
-    return config, nil
+	return config, nil
 }
 
 func main() {
-    kingpin.MustParse(app.Parse(os.Args[1:]))
+	kingpin.MustParse(app.Parse(os.Args[1:]))
 
-    config, err := parseConfig(*config)
-    if err != nil {
-        log.Fatal("Invalid config")
-    }
+	config, err := parseConfig(*config)
+	if err != nil {
+		log.Fatal("Invalid config")
+	}
 
-    filter, err := parseFilter(&config, *filter)
-    if err != nil {
-        log.Fatal("Invalid filter")
-    }
+	filter, err := parseFilter(&config, *filter)
+	if err != nil {
+		log.Fatal("Invalid filter")
+	}
 
-    cc, to := parseRecipients(&config, *recipients)
-    if len(cc) == 0 && len(to) == 0 {
-        log.Fatal("Invalid recipients")
-    }
+	cc, to := parseRecipients(&config, *recipients)
+	if len(cc) == 0 && len(to) == 0 {
+		log.Fatal("Invalid recipients")
+	}
 
-    cc, err = fetchAddress(&config, cc)
-    if err != nil {
-        log.Fatal("Failed to fetch cc address")
-    }
+	cc, err = fetchAddress(&config, cc)
+	if err != nil {
+		log.Fatal("Failed to fetch cc address")
+	}
 
-    to, err = fetchAddress(&config, to)
-    if err != nil {
-        log.Fatal("Failed to fetch to address")
-    }
+	to, err = fetchAddress(&config, to)
+	if err != nil {
+		log.Fatal("Failed to fetch to address")
+	}
 
-    printAddress(cc, to, filter)
+	printAddress(cc, to, filter)
 
-    os.Exit(0)
+	os.Exit(0)
 }
