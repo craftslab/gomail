@@ -29,7 +29,7 @@ import (
 
 const (
 	author  = "Jia Jia"
-	version = "2.0.1"
+	version = "2.0.2"
 )
 
 type Config struct {
@@ -106,6 +106,10 @@ func printAddress(cc []string, to []string, filter []string) {
 		}
 	}
 
+	if len(cc) == 0 {
+		return
+	}
+
 	for index := 0; index < len(cc)-1; index++ {
 		if err := filterAddress(cc[index], filter); err == nil {
 			fmt.Printf("cc:%s,", cc[index])
@@ -118,7 +122,8 @@ func printAddress(cc []string, to []string, filter []string) {
 }
 
 func queryLdap(config *Config, data string) (string, error) {
-	l, err := ldap.Dial("tcp", fmt.Sprintf("%s:%d", config.Host, config.Port))
+	l, err := ldap.DialURL(fmt.Sprintf("%s:%d", config.Host, config.Port))
+
 	if err != nil {
 		return "", errors.Wrap(err, "dial failed")
 	}
@@ -147,11 +152,10 @@ func queryLdap(config *Config, data string) (string, error) {
 	}
 
 	if len(result.Entries) != 1 {
-		return "", errors.New("result invalid")
+		return "", nil
 	}
 
-	// TODO
-	return "", nil
+	return result.Entries[0].GetAttributeValue("mail"), nil
 }
 
 func parseId(data string) string {

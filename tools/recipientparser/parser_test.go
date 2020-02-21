@@ -59,10 +59,17 @@ func TestFilterAddress(t *testing.T) {
 
 func TestPrintAddress(t *testing.T) {
 	filter := []string{"@example.com"}
+
 	cc := []string{"alen@example.com"}
 	to := []string{"bob@example.com"}
-
 	printAddress(cc, to, filter)
+
+	to = []string{}
+	printAddress(cc, to, filter)
+
+	cc = []string{}
+	printAddress(cc, to, filter)
+
 }
 
 func TestQueryLdap(t *testing.T) {

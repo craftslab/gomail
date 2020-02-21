@@ -27,7 +27,7 @@ import (
 
 const (
 	author  = "Jia Jia"
-	version = "2.0.1"
+	version = "2.0.2"
 )
 
 type Config struct {
