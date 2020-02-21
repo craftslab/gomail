@@ -69,7 +69,6 @@ func TestPrintAddress(t *testing.T) {
 
 	cc = []string{}
 	printAddress(cc, to, filter)
-
 }
 
 func TestQueryLdap(t *testing.T) {

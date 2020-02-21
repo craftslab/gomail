@@ -123,7 +123,6 @@ func printAddress(cc []string, to []string, filter []string) {
 
 func queryLdap(config *Config, data string) (string, error) {
 	l, err := ldap.DialURL(fmt.Sprintf("%s:%d", config.Host, config.Port))
-
 	if err != nil {
 		return "", errors.Wrap(err, "dial failed")
 	}
