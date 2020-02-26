@@ -77,7 +77,7 @@ func TestPrintAddress(t *testing.T) {
 }
 
 func TestQueryLdap(t *testing.T) {
-	config, err := parseConfig("../../config/parser.json")
+	config, err := parseConfig("../config/parser.json")
 	if err != nil {
 		t.Error("FAIL")
 	}
@@ -100,7 +100,7 @@ func TestParseId(t *testing.T) {
 }
 
 func TestFetchAddress(t *testing.T) {
-	config, err := parseConfig("../../config/parser.json")
+	config, err := parseConfig("../config/parser.json")
 	if err != nil {
 		t.Error("FAIL")
 	}
@@ -113,7 +113,7 @@ func TestFetchAddress(t *testing.T) {
 }
 
 func TestParseRecipients(t *testing.T) {
-	config, err := parseConfig("../../config/parser.json")
+	config, err := parseConfig("../config/parser.json")
 	if err != nil {
 		t.Error("FAIL")
 	}
@@ -127,7 +127,7 @@ func TestParseRecipients(t *testing.T) {
 }
 
 func TestParseFilter(t *testing.T) {
-	config, err := parseConfig("../../config/parser.json")
+	config, err := parseConfig("../config/parser.json")
 	if err != nil {
 		t.Error("FAIL")
 	}
@@ -140,7 +140,7 @@ func TestParseFilter(t *testing.T) {
 }
 
 func TestParseConfig(t *testing.T) {
-	if _, err := parseConfig("../../config/parser.json"); err != nil {
+	if _, err := parseConfig("../config/parser.json"); err != nil {
 		t.Error("FAIL")
 	}
 }

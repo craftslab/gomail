@@ -42,7 +42,7 @@ type Config struct {
 }
 
 var (
-	app = kingpin.New("recipientparser", "Recipient parser written in Go").Author(author).Version(version)
+	app = kingpin.New("parser", "Recipient parser written in Go").Author(author).Version(version)
 
 	config     = app.Flag("config", "Config file, format: .json").Short('c').String()
 	filter     = app.Flag("filter", "Filter list, format: @example1.com,@example2.com").Short('f').String()
