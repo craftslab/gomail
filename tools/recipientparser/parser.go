@@ -87,7 +87,9 @@ func filterAddress(data string, filter []string) error {
 
 	for _, item := range filter {
 		if endsWith := strings.HasSuffix(data, item); endsWith {
-			err = nil
+			if data != item {
+				err = nil
+			}
 			break
 		}
 	}

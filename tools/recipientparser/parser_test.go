@@ -49,10 +49,15 @@ func TestRemoveDuplicates(t *testing.T) {
 }
 
 func TestFilterAddress(t *testing.T) {
-	address := "alen@example.com"
 	filter := []string{"@example.com"}
 
+	address := "alen@example.com"
 	if err := filterAddress(address, filter); err != nil {
+		t.Error("FAIL")
+	}
+
+	address = "@example.com"
+	if err := filterAddress(address, filter); err == nil {
 		t.Error("FAIL")
 	}
 }
