@@ -20,14 +20,14 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/go-mail/mail"
 	"github.com/pkg/errors"
 	"gopkg.in/alecthomas/kingpin.v2"
-	"gopkg.in/gomail.v2"
 )
 
 const (
 	author  = "Jia Jia"
-	version = "2.0.3"
+	version = "2.0.4"
 )
 
 type Config struct {
@@ -91,7 +91,7 @@ func checkFile(name string) (string, error) {
 }
 
 func sendMail(config *Config, data *Mail) error {
-	msg := gomail.NewMessage()
+	msg := mail.NewMessage()
 
 	msg.SetAddressHeader("From", config.Sender, data.From)
 	msg.SetHeader("Cc", data.Cc[:]...)
@@ -100,10 +100,10 @@ func sendMail(config *Config, data *Mail) error {
 	msg.SetBody(data.ContentType, data.Body)
 
 	for _, item := range data.Attachment {
-		msg.Attach(item, gomail.Rename(filepath.Base(item)))
+		msg.Attach(item, mail.Rename(filepath.Base(item)))
 	}
 
-	dialer := gomail.NewDialer(config.Host, config.Port, config.User, config.Pass)
+	dialer := mail.NewDialer(config.Host, config.Port, config.User, config.Pass)
 
 	if err := dialer.DialAndSend(msg); err != nil {
 		return errors.Wrap(err, "send failed")
