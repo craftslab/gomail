@@ -29,7 +29,7 @@ import (
 
 const (
 	author  = "Jia Jia"
-	version = "2.0.3"
+	version = "2.0.4"
 )
 
 type Config struct {
@@ -173,26 +173,23 @@ func parseId(data string) string {
 }
 
 func fetchAddress(config *Config, data []string) ([]string, error) {
-	var address string
 	var buf []string
-	var err error
 
 	for _, item := range data {
 		if found := strings.Contains(item, "@"); found {
 			buf = append(buf, item)
 		} else {
 			if id := parseId(item); len(id) != 0 {
-				if address, err = queryLdap(config, id); err != nil {
-					break
-				}
-				if len(address) != 0 {
-					buf = append(buf, address)
+				if address, err := queryLdap(config, id); err == nil {
+					if len(address) != 0 {
+						buf = append(buf, address)
+					}
 				}
 			}
 		}
 	}
 
-	return buf, err
+	return buf, nil
 }
 
 func parseRecipients(config *Config, data string) ([]string, []string) {
