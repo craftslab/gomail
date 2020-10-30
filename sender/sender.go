@@ -27,7 +27,7 @@ import (
 
 const (
 	author  = "Jia Jia"
-	version = "2.0.4"
+	version = "2.0.5"
 )
 
 type Config struct {
@@ -235,22 +235,22 @@ func main() {
 
 	config, err := parseConfig(*config)
 	if err != nil {
-		log.Fatal("Invalid config")
+		log.Fatal(err)
 	}
 
 	attachment, err := parseAttachment(&config, *attachment)
 	if err != nil {
-		log.Fatal("Invalid attachment")
+		log.Fatal(err)
 	}
 
 	body, err := parseBody(*body)
 	if err != nil {
-		log.Fatal("Invalid body")
+		log.Fatal(err)
 	}
 
 	contentType, err := parseContentType(*contentType)
 	if err != nil {
-		log.Fatal("Invalid content_type")
+		log.Fatal(err)
 	}
 
 	cc, to := parseRecipients(&config, *recipients)
@@ -258,7 +258,7 @@ func main() {
 		log.Fatal("Invalid recipients")
 	}
 
-	mail := Mail{
+	m := Mail{
 		attachment,
 		body,
 		cc,
@@ -268,8 +268,8 @@ func main() {
 		to,
 	}
 
-	if err := sendMail(&config, &mail); err != nil {
-		log.Fatal("Failed to send mail")
+	if err := sendMail(&config, &m); err != nil {
+		log.Fatal(err)
 	}
 
 	os.Exit(0)
