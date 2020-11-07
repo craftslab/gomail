@@ -76,38 +76,20 @@ func TestPrintAddress(t *testing.T) {
 	printAddress(cc, to, filter)
 }
 
-func TestQueryLdap(t *testing.T) {
-	config, err := parseConfig("../config/parser.json")
-	if err != nil {
+func TestParseName(t *testing.T) {
+	if name := parseName("alen"); name != "alen" {
 		t.Error("FAIL")
 	}
 
-	if address, err := queryLdap(&config, parseId("alen10000001")); err != nil {
-		if len(address) != 0 {
-			t.Error("FAIL")
-		}
-	}
-}
-
-func TestParseId(t *testing.T) {
-	if id := parseId("alen10000001"); id != "10000001" {
+	if name := parseName("alen@example"); name != "alen" {
 		t.Error("FAIL")
 	}
 
-	if id := parseId("alen00000000"); id != "00000000" {
-		t.Error("FAIL")
-	}
-}
-
-func TestFetchAddress(t *testing.T) {
-	config, err := parseConfig("../config/parser.json")
-	if err != nil {
+	if name := parseName("1024"); name != "1024" {
 		t.Error("FAIL")
 	}
 
-	recipients := []string{"alen@example", "bob"}
-
-	if address, _ := fetchAddress(&config, recipients); len(address) < 1 {
+	if name := parseName("1024@example"); name != "1024" {
 		t.Error("FAIL")
 	}
 }

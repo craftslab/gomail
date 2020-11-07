@@ -20,7 +20,6 @@ import (
 	"log"
 	"os"
 	"strings"
-	"unicode"
 
 	"github.com/go-ldap/ldap/v3"
 	"github.com/pkg/errors"
@@ -29,7 +28,7 @@ import (
 
 const (
 	author  = "Jia Jia"
-	version = "2.0.4"
+	version = "2.0.5"
 )
 
 type Config struct {
@@ -123,7 +122,7 @@ func printAddress(cc []string, to []string, filter []string) {
 	}
 }
 
-func queryLdap(config *Config, data string) (string, error) {
+func queryLdap(config *Config, filter, data string) (string, error) {
 	l, err := ldap.DialURL(fmt.Sprintf("%s:%d", config.Host, config.Port))
 	if err != nil {
 		return "", errors.Wrap(err, "dial failed")
@@ -142,7 +141,7 @@ func queryLdap(config *Config, data string) (string, error) {
 	searchRequest := ldap.NewSearchRequest(
 		config.Base,
 		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
-		fmt.Sprintf("(sAMAccountName=%s)", data),
+		fmt.Sprintf("(%s=%s)", filter, data),
 		[]string{"*"},
 		nil,
 	)
@@ -153,19 +152,15 @@ func queryLdap(config *Config, data string) (string, error) {
 	}
 
 	if len(result.Entries) != 1 {
-		return "", nil
+		return "", errors.New("search null")
 	}
 
 	return result.Entries[0].GetAttributeValue("mail"), nil
 }
 
-func parseId(data string) string {
-	f := func(c rune) bool {
-		return !unicode.IsNumber(c)
-	}
-
-	buf := strings.FieldsFunc(data, f)
-	if len(buf) != 1 {
+func parseName(data string) string {
+	buf := strings.Split(data, "@")
+	if len(buf) == 0 {
 		return ""
 	}
 
@@ -176,16 +171,14 @@ func fetchAddress(config *Config, data []string) ([]string, error) {
 	var buf []string
 
 	for _, item := range data {
-		if found := strings.Contains(item, "@"); found {
-			buf = append(buf, item)
-		} else {
-			if id := parseId(item); len(id) != 0 {
-				if address, err := queryLdap(config, id); err == nil {
-					if len(address) != 0 {
-						buf = append(buf, address)
-					}
-				}
+		address, err := queryLdap(config, "mail", item)
+		if err != nil {
+			if addr, err := queryLdap(config, "sAMAccountName", parseName(item)); err == nil {
+				address = addr
 			}
+		}
+		if len(address) != 0 {
+			buf = append(buf, address)
 		}
 	}
 
