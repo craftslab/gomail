@@ -28,7 +28,7 @@ import (
 
 const (
 	author  = "Jia Jia"
-	version = "2.0.5"
+	version = "2.0.6"
 )
 
 type Config struct {
@@ -151,7 +151,7 @@ func queryLdap(config *Config, filter, data string) (string, error) {
 		return "", errors.Wrap(err, "search failed")
 	}
 
-	if len(result.Entries) != 1 {
+	if len(result.Entries) < 1 {
 		return "", errors.New("search null")
 	}
 
