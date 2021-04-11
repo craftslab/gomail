@@ -27,7 +27,7 @@ import (
 
 const (
 	author  = "Jia Jia"
-	version = "2.0.6"
+	version = "2.0.7"
 )
 
 type Config struct {
@@ -57,7 +57,7 @@ var (
 )
 
 var (
-	app = kingpin.New("mailsender", "Mail sender written in Go").Author(author).Version(version)
+	app = kingpin.New("sender", "Mail sender").Author(author).Version(version)
 
 	attachment  = app.Flag("attachment", "Attachment files, format: attach1,attach2,...").Short('a').String()
 	body        = app.Flag("body", "Body text or file").Short('b').String()
@@ -68,6 +68,161 @@ var (
 	recipients = app.Flag("recipients", "Recipients list, format: alen@example.com,cc:bob@example.com").Short('p').Required().String()
 	title      = app.Flag("title", "Title text").Short('t').String()
 )
+
+func main() {
+	kingpin.MustParse(app.Parse(os.Args[1:]))
+
+	config, err := parseConfig(*config)
+	if err != nil {
+		log.Println(err)
+		os.Exit(1)
+	}
+
+	attachment, err := parseAttachment(&config, *attachment)
+	if err != nil {
+		log.Println(err)
+		os.Exit(1)
+	}
+
+	body, err := parseBody(*body)
+	if err != nil {
+		log.Println(err)
+		os.Exit(1)
+	}
+
+	contentType, err := parseContentType(*contentType)
+	if err != nil {
+		log.Println(err)
+		os.Exit(1)
+	}
+
+	cc, to := parseRecipients(&config, *recipients)
+	if len(cc) == 0 && len(to) == 0 {
+		log.Println("Invalid recipients")
+		os.Exit(1)
+	}
+
+	m := Mail{
+		attachment,
+		body,
+		cc,
+		contentType,
+		*header,
+		*title,
+		to,
+	}
+
+	if err := sendMail(&config, &m); err != nil {
+		log.Println(err)
+		os.Exit(1)
+	}
+
+	os.Exit(0)
+}
+
+func parseConfig(name string) (Config, error) {
+	var config Config
+
+	fi, err := os.Open(name)
+	if err != nil {
+		return config, errors.Wrap(err, "open failed")
+	}
+
+	defer func() { _ = fi.Close() }()
+
+	buf, _ := ioutil.ReadAll(fi)
+	if err := json.Unmarshal(buf, &config); err != nil {
+		return config, errors.Wrap(err, "unmarshal failed")
+	}
+
+	return config, nil
+}
+
+func parseAttachment(config *Config, name string) ([]string, error) {
+	var err error
+	var names []string
+
+	if name == "" {
+		return names, nil
+	}
+
+	names = strings.Split(name, config.Sep)
+	for i := 0; i < len(names); i++ {
+		names[i], err = checkFile(names[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return names, nil
+}
+
+func parseBody(data string) (string, error) {
+	_name, err := checkFile(data)
+	if err != nil {
+		return data, nil
+	}
+
+	buf, err := ioutil.ReadFile(_name)
+	if err != nil {
+		return data, errors.Wrap(err, "read failed")
+	}
+
+	return string(buf), nil
+}
+
+func parseContentType(data string) (string, error) {
+	buf, isPresent := contentTypeMap[data]
+	if !isPresent {
+		return "", errors.New("content type invalid")
+	}
+
+	return buf, nil
+}
+
+func parseRecipients(config *Config, data string) (cc, to []string) {
+	buf := strings.Split(data, config.Sep)
+	for _, item := range buf {
+		if item != "" {
+			if hasPrefix := strings.HasPrefix(item, "cc:"); hasPrefix {
+				buf := strings.ReplaceAll(item, "cc:", "")
+				if buf != "" {
+					cc = append(cc, buf)
+				}
+			} else {
+				to = append(to, item)
+			}
+		}
+	}
+
+	cc = removeDuplicates(cc)
+	to = removeDuplicates(to)
+	cc = collectDifference(cc, to)
+
+	return cc, to
+}
+
+func sendMail(config *Config, data *Mail) error {
+	msg := mail.NewMessage()
+
+	msg.SetAddressHeader("From", config.Sender, data.From)
+	msg.SetHeader("Cc", data.Cc...)
+	msg.SetHeader("Subject", data.Subject)
+	msg.SetHeader("To", data.To...)
+	msg.SetBody(data.ContentType, data.Body)
+
+	for _, item := range data.Attachment {
+		msg.Attach(item, mail.Rename(filepath.Base(item)))
+	}
+
+	dialer := mail.NewDialer(config.Host, config.Port, config.User, config.Pass)
+
+	if err := dialer.DialAndSend(msg); err != nil {
+		return errors.Wrap(err, "send failed")
+	}
+
+	return nil
+}
 
 func checkFile(name string) (string, error) {
 	buf := name
@@ -90,29 +245,21 @@ func checkFile(name string) (string, error) {
 	return buf, nil
 }
 
-func sendMail(config *Config, data *Mail) error {
-	msg := mail.NewMessage()
+func removeDuplicates(data []string) []string {
+	var buf []string
+	key := make(map[string]bool)
 
-	msg.SetAddressHeader("From", config.Sender, data.From)
-	msg.SetHeader("Cc", data.Cc[:]...)
-	msg.SetHeader("Subject", data.Subject)
-	msg.SetHeader("To", data.To[:]...)
-	msg.SetBody(data.ContentType, data.Body)
-
-	for _, item := range data.Attachment {
-		msg.Attach(item, mail.Rename(filepath.Base(item)))
+	for _, item := range data {
+		if _, isPresent := key[item]; !isPresent {
+			key[item] = true
+			buf = append(buf, item)
+		}
 	}
 
-	dialer := mail.NewDialer(config.Host, config.Port, config.User, config.Pass)
-
-	if err := dialer.DialAndSend(msg); err != nil {
-		return errors.Wrap(err, "send failed")
-	}
-
-	return nil
+	return buf
 }
 
-func collectDifference(data []string, other []string) []string {
+func collectDifference(data, other []string) []string {
 	var buf []string
 	key := make(map[string]bool)
 
@@ -129,148 +276,4 @@ func collectDifference(data []string, other []string) []string {
 	}
 
 	return buf
-}
-
-func removeDuplicates(data []string) []string {
-	var buf []string
-	key := make(map[string]bool)
-
-	for _, item := range data {
-		if _, isPresent := key[item]; !isPresent {
-			key[item] = true
-			buf = append(buf, item)
-		}
-	}
-
-	return buf
-}
-
-func parseRecipients(config *Config, data string) ([]string, []string) {
-	var cc []string
-	var to []string
-
-	buf := strings.Split(data, config.Sep)
-	for _, item := range buf {
-		if len(item) != 0 {
-			if hasPrefix := strings.HasPrefix(item, "cc:"); hasPrefix {
-				buf := strings.ReplaceAll(item, "cc:", "")
-				if len(buf) != 0 {
-					cc = append(cc, buf)
-				}
-			} else {
-				to = append(to, item)
-			}
-		}
-	}
-
-	cc = removeDuplicates(cc)
-	to = removeDuplicates(to)
-	cc = collectDifference(cc, to)
-
-	return cc, to
-}
-
-func parseContentType(data string) (string, error) {
-	buf, isPresent := contentTypeMap[data]
-	if !isPresent {
-		return "", errors.New("content type invalid")
-	}
-
-	return buf, nil
-}
-
-func parseBody(data string) (string, error) {
-	_name, err := checkFile(data)
-	if err != nil {
-		return data, nil
-	}
-
-	buf, err := ioutil.ReadFile(_name)
-	if err != nil {
-		return data, errors.Wrap(err, "read failed")
-	}
-
-	return string(buf), nil
-}
-
-func parseAttachment(config *Config, name string) ([]string, error) {
-	var err error
-	var names []string
-
-	if len(name) == 0 {
-		return names, nil
-	}
-
-	names = strings.Split(name, config.Sep)
-	for i := 0; i < len(names); i++ {
-		names[i], err = checkFile(names[i])
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return names, nil
-}
-
-func parseConfig(name string) (Config, error) {
-	var config Config
-
-	fi, err := os.Open(name)
-	if err != nil {
-		return config, errors.Wrap(err, "open failed")
-	}
-
-	defer fi.Close()
-
-	buf, _ := ioutil.ReadAll(fi)
-	if err := json.Unmarshal(buf, &config); err != nil {
-		return config, errors.Wrap(err, "unmarshal failed")
-	}
-
-	return config, nil
-}
-
-func main() {
-	kingpin.MustParse(app.Parse(os.Args[1:]))
-
-	config, err := parseConfig(*config)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	attachment, err := parseAttachment(&config, *attachment)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	body, err := parseBody(*body)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	contentType, err := parseContentType(*contentType)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	cc, to := parseRecipients(&config, *recipients)
-	if len(cc) == 0 && len(to) == 0 {
-		log.Fatal("Invalid recipients")
-	}
-
-	m := Mail{
-		attachment,
-		body,
-		cc,
-		contentType,
-		*header,
-		*title,
-		to,
-	}
-
-	if err := sendMail(&config, &m); err != nil {
-		log.Fatal(err)
-	}
-
-	os.Exit(0)
 }

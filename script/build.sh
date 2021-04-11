@@ -2,16 +2,15 @@
 
 go env -w GOPROXY=https://goproxy.cn,direct
 
-CGO_ENABLED=0 GOARCH=amd64 GOOS=linux go build -ldflags="-s -w" -o bin/mailsender sender/sender.go
-CGO_ENABLED=0 GOARCH=amd64 GOOS=linux go build -ldflags="-s -w" -o bin/recipientparser parser/parser.go
+ldflags="-s -w"
+list="parser,sender"
+old=$IFS IFS=$','
 
-CGO_ENABLED=0 GOARCH=amd64 GOOS=windows go build -ldflags="-s -w" -o bin/mailsender.exe sender/sender.go
-CGO_ENABLED=0 GOARCH=amd64 GOOS=windows go build -ldflags="-s -w" -o bin/recipientparser.exe parser/parser.go
+for item in $list; do
+  GIN_MODE=release CGO_ENABLED=0 GOARCH=amd64 GOOS=linux go build -ldflags "$ldflags" -o bin/$item $item/$item.go
+  GIN_MODE=release CGO_ENABLED=0 GOARCH=amd64 GOOS=windows go build -ldflags "$ldflags" -o bin/$item.exe $item/$item.go
+  upx bin/$item
+  upx bin/$item.exe
+done
 
-apt install upx
-
-upx bin/mailsender
-upx bin/mailsender.exe
-
-upx bin/recipientparser
-upx bin/recipientparser.exe
+IFS=$old

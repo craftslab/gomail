@@ -16,80 +16,21 @@ import (
 	"testing"
 )
 
-func TestCollectDifference(t *testing.T) {
-	bufA := []string{"alen@example.com", "bob@example.com"}
-	bufB := []string{"alen@example.com"}
-
-	if buf := collectDifference(bufA, bufB); len(buf) != 1 {
+func TestParseConfig(t *testing.T) {
+	if _, err := parseConfig("../config/parser.json"); err != nil {
 		t.Error("FAIL")
 	}
 }
 
-func checkDuplicates(data []string) bool {
-	found := false
-	key := make(map[string]bool)
-
-	for _, item := range data {
-		if _, isPresent := key[item]; isPresent {
-			found = true
-			break
-		}
-	}
-
-	return found
-}
-
-func TestRemoveDuplicates(t *testing.T) {
-	buf := []string{"alen@example.com", "bob@example.com", "alen@example.com"}
-	buf = removeDuplicates(buf)
-
-	if found := checkDuplicates(buf); found {
-		t.Error("FAIL")
-	}
-}
-
-func TestFilterAddress(t *testing.T) {
-	filter := []string{"@example.com"}
-
-	address := "alen@example.com"
-	if err := filterAddress(address, filter); err != nil {
+func TestParseFilter(t *testing.T) {
+	config, err := parseConfig("../config/parser.json")
+	if err != nil {
 		t.Error("FAIL")
 	}
 
-	address = "@example.com"
-	if err := filterAddress(address, filter); err == nil {
-		t.Error("FAIL")
-	}
-}
+	filter := "alen@example.com,,bob@example.com,"
 
-func TestPrintAddress(t *testing.T) {
-	filter := []string{"@example.com"}
-
-	cc := []string{"alen@example.com"}
-	to := []string{"bob@example.com"}
-	printAddress(cc, to, filter)
-
-	to = []string{}
-	printAddress(cc, to, filter)
-
-	cc = []string{}
-	printAddress(cc, to, filter)
-}
-
-func TestParseName(t *testing.T) {
-	if name := parseName("alen"); name != "alen" {
-		t.Error("FAIL")
-	}
-
-	if name := parseName("alen@example"); name != "alen" {
-		t.Error("FAIL")
-	}
-
-	if name := parseName("1024"); name != "1024" {
-		t.Error("FAIL")
-	}
-
-	if name := parseName("1024@example"); name != "1024" {
+	if _, err := parseFilter(&config, filter); err != nil {
 		t.Error("FAIL")
 	}
 }
@@ -108,21 +49,62 @@ func TestParseRecipients(t *testing.T) {
 	}
 }
 
-func TestParseFilter(t *testing.T) {
-	config, err := parseConfig("../config/parser.json")
-	if err != nil {
-		t.Error("FAIL")
-	}
+func TestPrintAddress(t *testing.T) {
+	filter := []string{"@example.com"}
 
-	filter := "alen@example.com,,bob@example.com,"
+	cc := []string{"alen@example.com"}
+	to := []string{"bob@example.com"}
+	printAddress(cc, to, filter)
 
-	if _, err := parseFilter(&config, filter); err != nil {
+	to = []string{}
+	printAddress(cc, to, filter)
+
+	cc = []string{}
+	printAddress(cc, to, filter)
+}
+
+func TestRemoveDuplicates(t *testing.T) {
+	buf := []string{"alen@example.com", "bob@example.com", "alen@example.com"}
+	buf = removeDuplicates(buf)
+
+	if found := checkDuplicates(buf); found {
 		t.Error("FAIL")
 	}
 }
 
-func TestParseConfig(t *testing.T) {
-	if _, err := parseConfig("../config/parser.json"); err != nil {
+func checkDuplicates(data []string) bool {
+	found := false
+	key := make(map[string]bool)
+
+	for _, item := range data {
+		if _, isPresent := key[item]; isPresent {
+			found = true
+			break
+		}
+	}
+
+	return found
+}
+
+func TestCollectDifference(t *testing.T) {
+	bufA := []string{"alen@example.com", "bob@example.com"}
+	bufB := []string{"alen@example.com"}
+
+	if buf := collectDifference(bufA, bufB); len(buf) != 1 {
+		t.Error("FAIL")
+	}
+}
+
+func TestFilterAddress(t *testing.T) {
+	filter := []string{"@example.com"}
+
+	address := "alen@example.com"
+	if err := filterAddress(address, filter); err != nil {
+		t.Error("FAIL")
+	}
+
+	address = "@example.com"
+	if err := filterAddress(address, filter); err == nil {
 		t.Error("FAIL")
 	}
 }
