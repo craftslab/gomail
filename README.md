@@ -1,15 +1,15 @@
-# gosender
+# gomail
 
-[![Actions Status](https://github.com/craftslab/gosender/workflows/CI/badge.svg?branch=master&event=push)](https://github.com/craftslab/gosender/actions?query=workflow%3ACI)
-[![Go Report Card](https://goreportcard.com/badge/github.com/craftslab/gosender)](https://goreportcard.com/report/github.com/craftslab/gosender)
-[![License](https://img.shields.io/github/license/craftslab/gosender.svg?color=brightgreen)](https://github.com/craftslab/gosender/blob/master/LICENSE)
-[![Tag](https://img.shields.io/github/tag/craftslab/gosender.svg?color=brightgreen)](https://github.com/craftslab/gosender/tags)
+[![Actions Status](https://github.com/craftslab/gomail/workflows/CI/badge.svg?branch=master&event=push)](https://github.com/craftslab/gomail/actions?query=workflow%3ACI)
+[![Go Report Card](https://goreportcard.com/badge/github.com/craftslab/gomail)](https://goreportcard.com/report/github.com/craftslab/gomail)
+[![License](https://img.shields.io/github/license/craftslab/gomail.svg?color=brightgreen)](https://github.com/craftslab/gomail/blob/master/LICENSE)
+[![Tag](https://img.shields.io/github/tag/craftslab/gomail.svg?color=brightgreen)](https://github.com/craftslab/gomail/tags)
 
 
 
 ## Introduction
 
-*gosender* is a mail sender written in Go.
+*gomail* is a mail sender written in Go.
 
 
 
@@ -21,7 +21,7 @@
 
 ## Features
 
-*gosender* supports:
+*gomail* supports:
 
 - Attachments
 - HTML and text templates
@@ -31,9 +31,9 @@
 ## Build
 
 ```bash
-git clone https://github.com/craftslab/gosender.git
+git clone https://github.com/craftslab/gomail.git
 
-cd gosender
+cd gomail
 make build
 ```
 
