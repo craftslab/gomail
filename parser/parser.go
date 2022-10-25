@@ -16,7 +16,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"os"
 	"strings"
@@ -96,7 +96,7 @@ func parseConfig(name string) (Config, error) {
 
 	defer func() { _ = fi.Close() }()
 
-	buf, _ := ioutil.ReadAll(fi)
+	buf, _ := io.ReadAll(fi)
 	if err = json.Unmarshal(buf, &config); err != nil {
 		return config, errors.Wrap(err, "unmarshal failed")
 	}
