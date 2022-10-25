@@ -71,7 +71,6 @@ linters:
     - nakedret
     - rowserrcheck
     - staticcheck
-    - structcheck
     - typecheck
     - unconvert
     - whitespace
@@ -87,6 +86,7 @@ linters:
   # - interfacer
   # - maligned
   # - prealloc
+  # - structcheck
   # - stylecheck
   # - unparam
   # - unused
