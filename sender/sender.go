@@ -163,7 +163,7 @@ func parseBody(data string) (string, error) {
 		return data, nil
 	}
 
-	buf, err := io.ReadFile(_name)
+	buf, err := os.ReadFile(_name)
 	if err != nil {
 		return data, errors.Wrap(err, "read failed")
 	}
