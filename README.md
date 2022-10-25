@@ -51,7 +51,7 @@ make build
 ```bash
 ./sender \
   --config="config/sender.json" \
-  --attachment="attach1.txt,attach2.text" \
+  --attachment="attach1.txt,attach2.txt" \
   --body="body.txt" \
   --content_type="PLAIN_TEXT" \
   --header="HEADER" \
