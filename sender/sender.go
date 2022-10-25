@@ -14,7 +14,7 @@ package main
 
 import (
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -130,7 +130,7 @@ func parseConfig(name string) (Config, error) {
 
 	defer func() { _ = fi.Close() }()
 
-	buf, _ := ioutil.ReadAll(fi)
+	buf, _ := io.ReadAll(fi)
 	if err := json.Unmarshal(buf, &config); err != nil {
 		return config, errors.Wrap(err, "unmarshal failed")
 	}
@@ -163,7 +163,7 @@ func parseBody(data string) (string, error) {
 		return data, nil
 	}
 
-	buf, err := ioutil.ReadFile(_name)
+	buf, err := io.ReadFile(_name)
 	if err != nil {
 		return data, errors.Wrap(err, "read failed")
 	}
