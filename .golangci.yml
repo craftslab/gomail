@@ -50,7 +50,6 @@ linters:
   disable-all: true
   enable:
     - bodyclose
-    - depguard
     - dogsled
     - errcheck
     - exportloopref
@@ -77,6 +76,7 @@ linters:
 
   # don't enable:
   # - deadcode
+  # - depguard
   # - dupl
   # - gochecknoglobals
   # - gocognit
