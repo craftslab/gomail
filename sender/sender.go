@@ -16,6 +16,7 @@ import (
 	"encoding/json"
 	"io"
 	"log"
+	"mime"
 	"os"
 	"path/filepath"
 	"strings"
@@ -212,7 +213,7 @@ func sendMail(config *Config, data *Mail) error {
 	msg.SetBody(data.ContentType, data.Body)
 
 	for _, item := range data.Attachment {
-		msg.Attach(item, mail.Rename(filepath.Base(item)))
+		msg.Attach(item, mail.Rename(mime.QEncoding.Encode("utf-8", filepath.Base(item))))
 	}
 
 	dialer := mail.NewDialer(config.Host, config.Port, config.User, config.Pass)
