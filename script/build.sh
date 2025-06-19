@@ -1,16 +1,10 @@
 #!/bin/bash
 
+buildTime=$(date +%FT%T%z)
+commitID=`git rev-parse --short=7 HEAD`
+ldflags="-s -w -X main.BuildTime=$buildTime -X main.CommitID=$commitID"
+target="sender"
+
 go env -w GOPROXY=https://goproxy.cn,direct
 
-ldflags="-s -w"
-list="parser,sender"
-old=$IFS IFS=$','
-
-for item in $list; do
-  CGO_ENABLED=0 GOARCH=amd64 GOOS=linux go build -ldflags "$ldflags" -o bin/$item $item/$item.go
-  CGO_ENABLED=0 GOARCH=amd64 GOOS=windows go build -ldflags "$ldflags" -o bin/$item.exe $item/$item.go
-  upx bin/$item
-  upx bin/$item.exe
-done
-
-IFS=$old
+CGO_ENABLED=0 GOARCH=$(go env GOARCH) GOOS=$(go env GOOS) go build -ldflags "$ldflags" -o bin/$target sender/sender.go
