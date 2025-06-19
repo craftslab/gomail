@@ -113,7 +113,7 @@ func parseAddress(field string) (string, error) {
 	addr, err := stdmail.ParseAddress(field)
 	if err != nil {
 		if isTrailingDotError(err) {
-			fmt.Printf("gomail: invalid RFC 5322 address %q: %v", field, err)
+			fmt.Printf("gomail: invalid RFC 5322 address %q: %v\n", field, err)
 			return parseAddressWithTrailingDot(field)
 		}
 		return "", fmt.Errorf("gomail: invalid address %q: %v", field, err)
