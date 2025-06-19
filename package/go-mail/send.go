@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	stdmail "net/mail"
+	"regexp"
+	"strings"
 )
 
 // Sender is the interface that wraps the Send method.
@@ -110,7 +112,34 @@ func addAddress(list []string, addr string) []string {
 func parseAddress(field string) (string, error) {
 	addr, err := stdmail.ParseAddress(field)
 	if err != nil {
+		if isTrailingDotError(err) {
+			fmt.Printf("gomail: invalid RFC 5322 address %q: %v", field, err)
+			return parseAddressWithTrailingDot(field)
+		}
 		return "", fmt.Errorf("gomail: invalid address %q: %v", field, err)
 	}
+
 	return addr.Address, nil
+}
+
+// Example: "Alice <alice.@example.com>"
+// See: https://cs.opensource.google/go/go/+/refs/tags/go1.24.4:src/net/mail/message.go;drc=d14cf8f91b1b9ab5009737b03e6e23cc201cbc22;l=714
+func parseAddressWithTrailingDot(field string) (string, error) {
+	re := regexp.MustCompile(`^(.+?)\s*<(.+?)>$`)
+	matches := re.FindStringSubmatch(strings.TrimSpace(field))
+
+	if len(matches) != 3 {
+		return "", fmt.Errorf("gomail: invalid address %q", field)
+	}
+
+	_ = strings.TrimSpace(matches[1])
+	address := strings.TrimSpace(matches[2])
+
+	return address, nil
+}
+
+// Example: "Alice <alice.@example.com>"
+// See: https://cs.opensource.google/go/go/+/refs/tags/go1.24.4:src/net/mail/message.go;drc=d14cf8f91b1b9ab5009737b03e6e23cc201cbc22;l=714
+func isTrailingDotError(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "trailing dot in atom")
 }
