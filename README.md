@@ -1,6 +1,6 @@
 # gomail
 
-[![Actions Status](https://github.com/craftslab/gomail/workflows/CI/badge.svg?branch=master&event=push)](https://github.com/craftslab/gomail/actions?query=workflow%3ACI)
+[![Actions Status](https://github.com/craftslab/gomail/workflows/ci/badge.svg?branch=master&event=push)](https://github.com/craftslab/gomail/actions?query=workflow%3Aci)
 [![Go Report Card](https://goreportcard.com/badge/github.com/craftslab/gomail)](https://goreportcard.com/report/github.com/craftslab/gomail)
 [![License](https://img.shields.io/github/license/craftslab/gomail.svg?color=brightgreen)](https://github.com/craftslab/gomail/blob/master/LICENSE)
 [![Tag](https://img.shields.io/github/tag/craftslab/gomail.svg?color=brightgreen)](https://github.com/craftslab/gomail/tags)
