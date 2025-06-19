@@ -15,7 +15,7 @@
 
 ## Prerequisites
 
-- Go >= 1.16.0
+- Go >= 1.24.0
 
 
 
