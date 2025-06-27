@@ -125,17 +125,25 @@ func parseAddress(field string) (string, error) {
 // Example: "Alice <alice.@example.com>"
 // See: https://cs.opensource.google/go/go/+/refs/tags/go1.24.4:src/net/mail/message.go;drc=d14cf8f91b1b9ab5009737b03e6e23cc201cbc22;l=714
 func parseAddressWithTrailingDot(field string) (string, error) {
-	re := regexp.MustCompile(`^(.+?)\s*<(.+?)>$`)
-	matches := re.FindStringSubmatch(strings.TrimSpace(field))
+	field = strings.TrimSpace(field)
 
-	if len(matches) != 3 {
-		return "", fmt.Errorf("gomail: invalid address %q", field)
+	// Check if it's in "Name <email>" format
+	re := regexp.MustCompile(`^(.+?)\s*<(.+?)>$`)
+	matches := re.FindStringSubmatch(field)
+
+	if len(matches) == 3 {
+		// Found name and email in angle brackets
+		address := strings.TrimSpace(matches[2])
+		return address, nil
 	}
 
-	_ = strings.TrimSpace(matches[1])
-	address := strings.TrimSpace(matches[2])
+	// Check if it's just an email address
+	emailRe := regexp.MustCompile(`^[^<>]+@[^<>]+$`)
+	if emailRe.MatchString(field) {
+		return field, nil
+	}
 
-	return address, nil
+	return "", fmt.Errorf("gomail: invalid address %q", field)
 }
 
 // Example: "Alice <alice.@example.com>"
