@@ -141,5 +141,5 @@ func parseAddressWithTrailingDot(field string) (string, error) {
 // Example: "Alice <alice.@example.com>"
 // See: https://cs.opensource.google/go/go/+/refs/tags/go1.24.4:src/net/mail/message.go;drc=d14cf8f91b1b9ab5009737b03e6e23cc201cbc22;l=714
 func isTrailingDotError(err error) bool {
-	return err != nil && strings.Contains(err.Error(), "trailing dot in atom")
+	return err != nil && (strings.Contains(err.Error(), "trailing dot in atom") || strings.Contains(err.Error(), "missing '@' or angle-addr"))
 }
