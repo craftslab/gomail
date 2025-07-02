@@ -20,9 +20,6 @@ upx:
     ids:
       - sender
     compress: best
-    flags:
-      - --best
-      - --lzma
     goos:
       - linux
     goarch:
