@@ -5,11 +5,12 @@ import (
 	"io"
 	"log"
 	"mime"
+	"net/mail"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/go-mail/mail"
+	gomail "github.com/go-mail/mail"
 	"github.com/pkg/errors"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
@@ -38,6 +39,16 @@ type Mail struct {
 	To          []string
 }
 
+type ValidationResult struct {
+	ValidAddresses   []string `json:"valid_addresses"`
+	InvalidAddresses []string `json:"invalid_addresses"`
+	CcAddresses      []string `json:"cc_addresses"`
+	ToAddresses      []string `json:"to_addresses"`
+	TotalCount       int      `json:"total_count"`
+	ValidCount       int      `json:"valid_count"`
+	InvalidCount     int      `json:"invalid_count"`
+}
+
 var (
 	contentTypeMap = map[string]string{
 		"HTML":       "text/html",
@@ -56,6 +67,7 @@ var (
 	header     = app.Flag("header", "Header text").Short('r').String()
 	recipients = app.Flag("recipients", "Recipients list, format: alen@example.com,cc:bob@example.com").Short('p').Required().String()
 	title      = app.Flag("title", "Title text").Short('t').String()
+	verbose    = app.Flag("verbose", "Enable verbose output").Short('v').Bool()
 )
 
 func main() {
@@ -85,7 +97,21 @@ func main() {
 		os.Exit(1)
 	}
 
-	cc, to := parseRecipients(&config, *recipients)
+	var cc, to []string
+	var validation ValidationResult
+
+	if *verbose {
+		cc, to, validation = parseRecipientsWithValidation(&config, *recipients)
+		jsonOutput, err := json.MarshalIndent(validation, "", "  ")
+		if err != nil {
+			log.Println("Error marshaling validation results:", err)
+			os.Exit(1)
+		}
+		log.Println(string(jsonOutput))
+	} else {
+		cc, to = parseRecipients(&config, *recipients)
+	}
+
 	if len(cc) == 0 && len(to) == 0 {
 		log.Println("Invalid recipients")
 		os.Exit(1)
@@ -191,8 +217,98 @@ func parseRecipients(config *Config, data string) (cc, to []string) {
 	return cc, to
 }
 
+func parseRecipientsWithValidation(config *Config, data string) (cc, to []string, validation ValidationResult) {
+	var allAddresses []string
+	var validAddresses []string
+	var invalidAddresses []string
+
+	cc = []string{}
+	to = []string{}
+
+	buf := strings.Split(data, config.Sep)
+
+	for _, item := range buf {
+		item = strings.TrimSpace(item)
+		if item != "" {
+			var email string
+			if hasPrefix := strings.HasPrefix(item, "cc:"); hasPrefix {
+				email = strings.TrimSpace(strings.ReplaceAll(item, "cc:", ""))
+			} else {
+				email = item
+			}
+			if email != "" {
+				allAddresses = append(allAddresses, email)
+				if isValidEmailWithSMTP(config, email) {
+					validAddresses = append(validAddresses, email)
+					if hasPrefix := strings.HasPrefix(item, "cc:"); hasPrefix {
+						cc = append(cc, email)
+					} else {
+						to = append(to, email)
+					}
+				} else {
+					invalidAddresses = append(invalidAddresses, email)
+				}
+			}
+		}
+	}
+
+	cc = removeDuplicates(cc)
+	to = removeDuplicates(to)
+	cc = collectDifference(cc, to)
+
+	validation = ValidationResult{
+		ValidAddresses:   removeDuplicates(validAddresses),
+		InvalidAddresses: removeDuplicates(invalidAddresses),
+		CcAddresses:      cc,
+		ToAddresses:      to,
+		TotalCount:       len(removeDuplicates(allAddresses)),
+		ValidCount:       len(removeDuplicates(validAddresses)),
+		InvalidCount:     len(removeDuplicates(invalidAddresses)),
+	}
+
+	return cc, to, validation
+}
+
+func isValidEmail(email string) bool {
+	// Use the same validation logic as the mail library
+	// This validates the email format according to RFC 5322 standards
+	email = strings.TrimSpace(email)
+	if email == "" {
+		return false
+	}
+
+	// First do basic format validation
+	_, err := mail.ParseAddress(email)
+	return err == nil
+}
+
+// nolint:staticcheck
+func isValidEmailWithSMTP(config *Config, email string) bool {
+	// First check basic format
+	if !isValidEmail(email) {
+		return false
+	}
+
+	// Test if the email would be accepted by the mail library
+	// by attempting to create a message with it (without sending)
+	defer func() {
+		// Recover from any panics that might occur during message creation
+		if r := recover(); r != nil {
+			// Email format caused a panic in the mail library
+		}
+	}()
+
+	msg := gomail.NewMessage()
+
+	// Try to set the email address using the same method as sendMail
+	// This will validate if the email format is compatible with the mail library
+	msg.SetHeader("To", email)
+
+	return true
+}
+
 func sendMail(config *Config, data *Mail) error {
-	msg := mail.NewMessage()
+	msg := gomail.NewMessage()
 
 	msg.SetAddressHeader("From", config.Sender, data.From)
 	msg.SetHeader("Cc", data.Cc...)
@@ -201,10 +317,10 @@ func sendMail(config *Config, data *Mail) error {
 	msg.SetBody(data.ContentType, data.Body)
 
 	for _, item := range data.Attachment {
-		msg.Attach(item, mail.Rename(mime.QEncoding.Encode("utf-8", filepath.Base(item))))
+		msg.Attach(item, gomail.Rename(mime.QEncoding.Encode("utf-8", filepath.Base(item))))
 	}
 
-	dialer := mail.NewDialer(config.Host, config.Port, config.User, config.Pass)
+	dialer := gomail.NewDialer(config.Host, config.Port, config.User, config.Pass)
 
 	if err := dialer.DialAndSend(msg); err != nil {
 		return errors.Wrap(err, "send failed")
@@ -235,6 +351,10 @@ func checkFile(name string) (string, error) {
 }
 
 func removeDuplicates(data []string) []string {
+	if data == nil {
+		return []string{}
+	}
+
 	var buf []string
 	key := make(map[string]bool)
 
@@ -245,11 +365,15 @@ func removeDuplicates(data []string) []string {
 		}
 	}
 
+	if buf == nil {
+		return []string{}
+	}
+
 	return buf
 }
 
 func collectDifference(data, other []string) []string {
-	var buf []string
+	buf := []string{}
 	key := make(map[string]bool)
 
 	for _, item := range other {

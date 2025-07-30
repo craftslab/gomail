@@ -56,7 +56,8 @@ make build
   --content_type="PLAIN_TEXT" \
   --header="HEADER" \
   --recipients="alen@example.com,bob@example.com,cc:catherine@example.com" \
-  --title="TITLE"
+  --title="TITLE" \
+  --verbose
 ```
 
 
@@ -95,6 +96,7 @@ Flags:
   -p, --recipients=RECIPIENTS    Recipients list, format:
                                  alen@example.com,cc:bob@example.com
   -t, --title=TITLE              Title text
+  -v, --verbose                  Enable verbose output
 ```
 
 
