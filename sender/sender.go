@@ -1,14 +1,19 @@
 package main
 
 import (
+	"crypto/tls"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"mime"
+	"net"
 	"net/mail"
+	"net/smtp"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	gomail "github.com/go-mail/mail"
 	"github.com/pkg/errors"
@@ -67,7 +72,7 @@ var (
 	header     = app.Flag("header", "Header text").Short('r').String()
 	recipients = app.Flag("recipients", "Recipients list, format: alen@example.com,cc:bob@example.com").Short('p').Required().String()
 	title      = app.Flag("title", "Title text").Short('t').String()
-	verbose    = app.Flag("verbose", "Enable verbose output").Short('v').Bool()
+	dryRun     = app.Flag("dry-run", "Only output recipient validation JSON and exit; do not send").Short('n').Bool()
 )
 
 func main() {
@@ -98,22 +103,21 @@ func main() {
 	}
 
 	var cc, to []string
-	var validation ValidationResult
 
-	if *verbose {
-		cc, to, validation = parseRecipientsWithValidation(&config, *recipients)
-		jsonOutput, err := json.MarshalIndent(validation, "", "  ")
-		if err != nil {
-			log.Println("Error marshaling validation results:", err)
-			os.Exit(1)
-		}
-		log.Println(string(jsonOutput))
-	} else {
-		cc, to = parseRecipients(&config, *recipients)
-	}
+	cc, to = parseRecipients(&config, *recipients)
 
 	if len(cc) == 0 && len(to) == 0 {
-		log.Println("Invalid recipients")
+		if *dryRun {
+			_, _, validation := parseRecipientsWithValidation(&config, *recipients)
+			jsonOutput, err := json.MarshalIndent(validation, "", "  ")
+			if err != nil {
+				log.Println("Error marshaling validation results:", err)
+				os.Exit(1)
+			}
+			log.Println(string(jsonOutput))
+			os.Exit(0)
+		}
+		log.Println("No valid recipients found")
 		os.Exit(1)
 	}
 
@@ -125,6 +129,43 @@ func main() {
 		*header,
 		*title,
 		to,
+	}
+
+	// In dry-run mode, output validation JSON (SMTP recipient checks when possible) and exit without sending
+	if *dryRun {
+		all := append([]string{}, cc...)
+		all = append(all, to...)
+		all = removeDuplicates(all)
+		var validAddrs []string
+		var invalidAddrs []string
+		for _, addr := range all {
+			if !isValidEmail(addr) {
+				invalidAddrs = append(invalidAddrs, addr)
+				continue
+			}
+			if smtpRecipientExists(&config, addr) {
+				validAddrs = append(validAddrs, addr)
+			} else {
+				invalidAddrs = append(invalidAddrs, addr)
+			}
+		}
+		// Build JSON result; cc/to remain as parsed, valid/invalid reflect checks
+		validation := ValidationResult{
+			ValidAddresses:   removeDuplicates(validAddrs),
+			InvalidAddresses: removeDuplicates(invalidAddrs),
+			CcAddresses:      cc,
+			ToAddresses:      to,
+			TotalCount:       len(all),
+			ValidCount:       len(removeDuplicates(validAddrs)),
+			InvalidCount:     len(removeDuplicates(invalidAddrs)),
+		}
+		jsonOutput, err := json.MarshalIndent(validation, "", "  ")
+		if err != nil {
+			log.Println("Error marshaling validation results:", err)
+			os.Exit(1)
+		}
+		log.Println(string(jsonOutput))
+		os.Exit(0)
 	}
 
 	if err := sendMail(&config, &m); err != nil {
@@ -279,37 +320,116 @@ func isValidEmail(email string) bool {
 
 	// First do basic format validation
 	_, err := mail.ParseAddress(email)
+
 	return err == nil
 }
 
 // nolint:staticcheck
 func isValidEmailWithSMTP(config *Config, email string) bool {
-	// First check basic format
+	// For verbose mode, we only do format validation
+	// The actual SMTP recipient validation is complex due to various server
+	// configurations, TLS requirements, and security policies.
+	// We'll let the actual sending process handle recipient validation.
+	return isValidEmail(email)
+}
+
+// smtpRecipientExists tries to validate an email via SMTP RCPT TO without sending mail.
+// It returns false only when the server clearly rejects the recipient (e.g., 550 no such user).
+// On connection/TLS/auth errors, it returns true to avoid false negatives in environments
+// where validation is not allowed.
+func smtpRecipientExists(config *Config, email string) bool {
 	if !isValidEmail(email) {
 		return false
 	}
 
-	// Test if the email would be accepted by the mail library
-	// by attempting to create a message with it (without sending)
-	defer func() {
-		// Recover from any panics that might occur during message creation
-		if r := recover(); r != nil {
-			// Email format caused a panic in the mail library
+	address := fmt.Sprintf("%s:%d", config.Host, config.Port)
+
+	// Try implicit TLS first when port is 465
+	if config.Port == 465 {
+		tlsConn, err := tls.Dial("tcp", address, &tls.Config{ServerName: config.Host})
+		if err == nil {
+			defer func() { _ = tlsConn.Close() }()
+			if rcptAcceptedTLS(tlsConn, config, email) {
+				return true
+			}
+			// If clearly rejected, return false; otherwise fall through to lenient true
+			return false
 		}
-	}()
+		// On error, fall back to plain path below
+	}
 
-	msg := gomail.NewMessage()
+	// Plain TCP then STARTTLS if supported
+	conn, err := net.DialTimeout("tcp", address, 8*time.Second)
+	if err != nil {
+		return true
+	}
+	defer func() { _ = conn.Close() }()
 
-	// Try to set the email address using the same method as sendMail
-	// This will validate if the email format is compatible with the mail library
-	msg.SetHeader("To", email)
+	client, err := smtp.NewClient(conn, config.Host)
+	if err != nil {
+		return true
+	}
+	defer func() { _ = client.Quit() }()
+
+	if ok, _ := client.Extension("STARTTLS"); ok {
+		if err = client.StartTLS(&tls.Config{ServerName: config.Host}); err != nil {
+			return true
+		}
+	}
+
+	// Do not authenticate for RCPT probe; many servers allow RCPT without AUTH and
+	// some explicitly block AUTH for probing. Proceed directly to MAIL/RCPT.
+
+	if err = client.Mail(config.Sender); err != nil {
+		return true
+	}
+
+	if err = client.Rcpt(email); err != nil {
+		errStr := strings.ToLower(err.Error())
+		// Clear rejections
+		if strings.Contains(errStr, "no such user") ||
+			strings.Contains(errStr, "user unknown") ||
+			strings.Contains(errStr, "recipient rejected") ||
+			strings.Contains(errStr, "mailbox unavailable") ||
+			strings.Contains(errStr, "recipient address rejected") ||
+			strings.Contains(errStr, "invalid recipient") ||
+			strings.Contains(errStr, "unknown user") ||
+			strings.Contains(errStr, "does not exist") ||
+			strings.Contains(errStr, "550") {
+			return false
+		}
+		return true
+	}
+
+	return true
+}
+
+// rcptAcceptedTLS is a helper for implicit TLS connections (port 465)
+func rcptAcceptedTLS(tlsConn net.Conn, config *Config, email string) bool {
+	client, err := smtp.NewClient(tlsConn, config.Host)
+	if err != nil {
+		return true
+	}
+	defer func() { _ = client.Quit() }()
+
+	// Skip AUTH for implicit TLS probe as well; go straight to MAIL/RCPT
+	if err = client.Mail(config.Sender); err != nil {
+		return true
+	}
+
+	if err = client.Rcpt(email); err != nil {
+		errStr := strings.ToLower(err.Error())
+		if strings.Contains(errStr, "550") || strings.Contains(errStr, "no such user") || strings.Contains(errStr, "invalid recipient") {
+			return false
+		}
+		return true
+	}
 
 	return true
 }
 
 func sendMail(config *Config, data *Mail) error {
 	msg := gomail.NewMessage()
-
 	msg.SetAddressHeader("From", config.Sender, data.From)
 	msg.SetHeader("Cc", data.Cc...)
 	msg.SetHeader("Subject", data.Subject)
@@ -323,10 +443,75 @@ func sendMail(config *Config, data *Mail) error {
 	dialer := gomail.NewDialer(config.Host, config.Port, config.User, config.Pass)
 
 	if err := dialer.DialAndSend(msg); err != nil {
+		// Check if this is a recipient validation error
+		errStr := strings.ToLower(err.Error())
+		if strings.Contains(errStr, "no such user") ||
+			strings.Contains(errStr, "user unknown") ||
+			strings.Contains(errStr, "recipient rejected") ||
+			strings.Contains(errStr, "550") {
+			// Try to identify which specific recipients are invalid
+			invalidRecipients, _ := identifyInvalidRecipients(config, data)
+			if len(invalidRecipients) > 0 {
+				return errors.Errorf("send failed - invalid recipients: %v (original error: %v)", invalidRecipients, err)
+			}
+			// If we can't identify specific invalid recipients, return the original error
+			allRecipients := append(data.To, data.Cc...)
+			return errors.Wrapf(err, "send failed - invalid recipient(s) detected among: %v", allRecipients)
+		}
 		return errors.Wrap(err, "send failed")
 	}
 
 	return nil
+}
+
+func identifyInvalidRecipients(config *Config, data *Mail) ([]string, []string) {
+	var invalidRecipients []string
+	var validRecipients []string
+
+	allRecipients := append(data.To, data.Cc...)
+
+	// Test each recipient individually by attempting to send
+	for _, recipient := range allRecipients {
+		if testRecipientBySending(config, data, recipient) {
+			validRecipients = append(validRecipients, recipient)
+		} else {
+			invalidRecipients = append(invalidRecipients, recipient)
+		}
+	}
+
+	return invalidRecipients, validRecipients
+}
+
+func testRecipientBySending(config *Config, data *Mail, recipient string) bool {
+	// Create a minimal test message for this recipient
+	msg := gomail.NewMessage()
+	msg.SetAddressHeader("From", config.Sender, data.From)
+	msg.SetHeader("Subject", "[VALIDATION TEST] "+data.Subject)
+	msg.SetHeader("To", recipient)
+	msg.SetBody("text/plain", "This is an automated recipient validation test.\n\nIf you received this message, your email address is valid.\nThe original message will be sent separately if validation succeeds.\n\n--- Original Message ---\n"+data.Body)
+
+	// Copy attachments if any (optional - you might want to skip for validation)
+	// for _, item := range data.Attachment {
+	//     msg.Attach(item, gomail.Rename(mime.QEncoding.Encode("utf-8", filepath.Base(item))))
+	// }
+
+	dialer := gomail.NewDialer(config.Host, config.Port, config.User, config.Pass)
+
+	err := dialer.DialAndSend(msg)
+	if err != nil {
+		errStr := strings.ToLower(err.Error())
+		// Check if this is a recipient validation error
+		if strings.Contains(errStr, "no such user") ||
+			strings.Contains(errStr, "user unknown") ||
+			strings.Contains(errStr, "recipient rejected") ||
+			strings.Contains(errStr, "550") {
+			return false
+		}
+		// For other errors, assume valid to avoid false negatives
+		return true
+	}
+
+	return true
 }
 
 func checkFile(name string) (string, error) {

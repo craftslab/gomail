@@ -57,7 +57,7 @@ make build
   --header="HEADER" \
   --recipients="alen@example.com,bob@example.com,cc:catherine@example.com" \
   --title="TITLE" \
-  --verbose
+  --dry-run
 ```
 
 
@@ -96,7 +96,8 @@ Flags:
   -p, --recipients=RECIPIENTS    Recipients list, format:
                                  alen@example.com,cc:bob@example.com
   -t, --title=TITLE              Title text
-  -v, --verbose                  Enable verbose output
+  -n, --dry-run                  Only output recipient validation JSON and exit;
+                                 do not send
 ```
 
 
