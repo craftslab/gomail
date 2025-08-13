@@ -114,7 +114,7 @@ func main() {
 				log.Println("Error marshaling validation results:", err)
 				os.Exit(1)
 			}
-			log.Println(string(jsonOutput))
+			fmt.Println(string(jsonOutput))
 			os.Exit(0)
 		}
 		log.Println("No valid recipients found")
@@ -164,7 +164,7 @@ func main() {
 			log.Println("Error marshaling validation results:", err)
 			os.Exit(1)
 		}
-		log.Println(string(jsonOutput))
+		fmt.Println(string(jsonOutput))
 		os.Exit(0)
 	}
 
@@ -483,35 +483,8 @@ func identifyInvalidRecipients(config *Config, data *Mail) ([]string, []string) 
 }
 
 func testRecipientBySending(config *Config, data *Mail, recipient string) bool {
-	// Create a minimal test message for this recipient
-	msg := gomail.NewMessage()
-	msg.SetAddressHeader("From", config.Sender, data.From)
-	msg.SetHeader("Subject", "[VALIDATION TEST] "+data.Subject)
-	msg.SetHeader("To", recipient)
-	msg.SetBody("text/plain", "This is an automated recipient validation test.\n\nIf you received this message, your email address is valid.\nThe original message will be sent separately if validation succeeds.\n\n--- Original Message ---\n"+data.Body)
-
-	// Copy attachments if any (optional - you might want to skip for validation)
-	// for _, item := range data.Attachment {
-	//     msg.Attach(item, gomail.Rename(mime.QEncoding.Encode("utf-8", filepath.Base(item))))
-	// }
-
-	dialer := gomail.NewDialer(config.Host, config.Port, config.User, config.Pass)
-
-	err := dialer.DialAndSend(msg)
-	if err != nil {
-		errStr := strings.ToLower(err.Error())
-		// Check if this is a recipient validation error
-		if strings.Contains(errStr, "no such user") ||
-			strings.Contains(errStr, "user unknown") ||
-			strings.Contains(errStr, "recipient rejected") ||
-			strings.Contains(errStr, "550") {
-			return false
-		}
-		// For other errors, assume valid to avoid false negatives
-		return true
-	}
-
-	return true
+	// Use SMTP RCPT TO validation without actually sending emails
+	return smtpRecipientExists(config, recipient)
 }
 
 func checkFile(name string) (string, error) {
