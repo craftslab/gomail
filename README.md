@@ -56,8 +56,7 @@ make build
   --content_type="PLAIN_TEXT" \
   --header="HEADER" \
   --recipients="alen@example.com,bob@example.com,cc:catherine@example.com" \
-  --title="TITLE" \
-  --dry-run
+  --title="TITLE"
 ```
 
 
