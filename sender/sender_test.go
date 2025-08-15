@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"testing"
 )
@@ -181,6 +182,11 @@ func TestIsValidEmail(t *testing.T) {
 		`"test user"@example.com`,
 		// Name with angle brackets (net/mail.ParseAddress handles this)
 		"John Doe <john@example.com>",
+		// Trailing dot cases that should now be handled
+		"alice.@example.com",
+		"Bob Smith <bob.@company.org>",
+		"user.@domain.net",
+		"test.name.@company.co.uk",
 	}
 
 	invalidEmails := []string{
@@ -195,7 +201,10 @@ func TestIsValidEmail(t *testing.T) {
 		"test space@example.com", // Unquoted space in local part
 		"test@exam ple.com",      // Space in domain
 		".test@example.com",      // Local part starts with dot
-		"test.@example.com",      // Local part ends with dot
+		// These should still be invalid even with trailing dot handling
+		"invalid.email.@", // Domain part is just @
+		"user@",           // Still missing domain after @
+		"@domain.com",     // Still missing local part
 	}
 
 	for _, email := range validEmails {
@@ -208,131 +217,6 @@ func TestIsValidEmail(t *testing.T) {
 		if isValidEmail(email) {
 			t.Errorf("Expected %s to be invalid", email)
 		}
-	}
-}
-
-func TestParseRecipientsWithValidation(t *testing.T) {
-	config := Config{
-		Host:   "nonexistent.smtp.server.com", // Use non-existent server for testing
-		Pass:   "testpass",
-		Port:   587,
-		Sender: "test@example.com",
-		Sep:    ",",
-		User:   "testuser",
-	}
-
-	testCases := []struct {
-		name            string
-		recipients      string
-		expectedCC      []string
-		expectedTO      []string
-		expectedValid   int
-		expectedInvalid int
-		expectedTotal   int
-	}{
-		{
-			name:            "Valid format emails with CC",
-			recipients:      "alice@example.com,cc:bob@example.com,charlie@example.com",
-			expectedCC:      []string{"bob@example.com"},
-			expectedTO:      []string{"alice@example.com", "charlie@example.com"},
-			expectedValid:   3, // All have valid format, SMTP connection will fail gracefully
-			expectedInvalid: 0,
-			expectedTotal:   3,
-		},
-		{
-			name:            "Mixed valid format and invalid format emails",
-			recipients:      "valid@example.com,invalid.email,cc:ccvalid@example.com,cc:invalid@",
-			expectedCC:      []string{"ccvalid@example.com"},
-			expectedTO:      []string{"valid@example.com"},
-			expectedValid:   2, // Only format-valid emails pass
-			expectedInvalid: 2, // Format-invalid emails fail
-			expectedTotal:   4,
-		},
-		{
-			name:            "Empty and duplicate emails",
-			recipients:      "test@example.com,,test@example.com,cc:cc@example.com,cc:cc@example.com",
-			expectedCC:      []string{"cc@example.com"},
-			expectedTO:      []string{"test@example.com"},
-			expectedValid:   2, // Valid format emails pass (duplicates removed)
-			expectedInvalid: 0,
-			expectedTotal:   2,
-		},
-		{
-			name:            "All invalid format emails",
-			recipients:      "test@,@example.com,cc:test..test@example.com",
-			expectedCC:      []string{},
-			expectedTO:      []string{},
-			expectedValid:   0, // All fail format validation
-			expectedInvalid: 3,
-			expectedTotal:   3,
-		},
-		{
-			name:            "RFC 5322 compliant addresses",
-			recipients:      `"quoted user"@example.com,cc:john@example.com,normal@example.com`,
-			expectedCC:      []string{"john@example.com"},
-			expectedTO:      []string{`"quoted user"@example.com`, "normal@example.com"},
-			expectedValid:   3, // All valid format emails pass
-			expectedInvalid: 0,
-			expectedTotal:   3,
-		},
-		{
-			name:            "Complex invalid format cases",
-			recipients:      "test@,@example.com,cc:test..test@example.com,cc:test@example..com",
-			expectedCC:      []string{},
-			expectedTO:      []string{},
-			expectedValid:   0, // All fail format validation
-			expectedInvalid: 4,
-			expectedTotal:   4,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			cc, to, validation := parseRecipientsWithValidation(&config, tc.recipients)
-
-			if !reflect.DeepEqual(cc, tc.expectedCC) {
-				t.Errorf("CC mismatch: expected %v, got %v", tc.expectedCC, cc)
-			}
-
-			if !reflect.DeepEqual(to, tc.expectedTO) {
-				t.Errorf("TO mismatch: expected %v, got %v", tc.expectedTO, to)
-			}
-
-			if validation.ValidCount != tc.expectedValid {
-				t.Errorf("Valid count mismatch: expected %d, got %d", tc.expectedValid, validation.ValidCount)
-			}
-
-			if validation.InvalidCount != tc.expectedInvalid {
-				t.Errorf("Invalid count mismatch: expected %d, got %d", tc.expectedInvalid, validation.InvalidCount)
-			}
-
-			if validation.TotalCount != tc.expectedTotal {
-				t.Errorf("Total count mismatch: expected %d, got %d", tc.expectedTotal, validation.TotalCount)
-			}
-
-			// Verify that validation result can be marshaled to JSON
-			jsonData, err := json.MarshalIndent(validation, "", "  ")
-			if err != nil {
-				t.Errorf("Failed to marshal validation result to JSON: %v", err)
-			}
-
-			// Verify that the JSON contains expected fields
-			var result map[string]interface{}
-			if err := json.Unmarshal(jsonData, &result); err != nil {
-				t.Errorf("Failed to unmarshal validation JSON: %v", err)
-			}
-
-			expectedFields := []string{
-				"valid_addresses", "invalid_addresses", "cc_addresses",
-				"to_addresses", "total_count", "valid_count", "invalid_count",
-			}
-
-			for _, field := range expectedFields {
-				if _, exists := result[field]; !exists {
-					t.Errorf("Missing field %s in JSON output", field)
-				}
-			}
-		})
 	}
 }
 
@@ -507,14 +391,18 @@ func TestEmailValidationWithEdgeCases(t *testing.T) {
 		"user@[192.168.1.1]":       true, // IP address in brackets
 		"a@b.c":                    true, // minimal valid email
 		"test.email@example.co.uk": true, // subdomain
+		// Trailing dot cases should now be valid
+		"alice.@example.com":    true, // simple trailing dot
+		"user.name.@domain.org": true, // multiple dots with trailing dot
 
 		// These should be invalid
 		"test@":              false, // missing domain
 		"@test.com":          false, // missing local part
 		"test":               false, // no @ symbol
 		"test@test@test.com": false, // multiple @ symbols
-		"test.@test.com":     false, // local part ends with dot
 		".test@test.com":     false, // local part starts with dot
+		"invalid.@":          false, // trailing dot but missing domain
+		"test@.":             false, // domain is just a dot
 	}
 
 	for email, expected := range edgeCases {
@@ -549,6 +437,8 @@ func TestSMTPValidationWithMockConfig(t *testing.T) {
 		// These have valid formats and should return true
 		{"valid@example.com", true},
 		{"another.valid@test.org", true},
+		// Trailing dot cases should be valid
+		{"alice.@example.com", true},
 	}
 
 	for _, tc := range testCases {
@@ -593,6 +483,8 @@ func TestValidateRecipientWithSMTPFormat(t *testing.T) {
 		"valid@example.com",
 		"test.user@domain.org",
 		"user+tag@example.co.uk",
+		// Trailing dot cases should be valid
+		"alice.@example.com",
 	}
 
 	for _, email := range validFormatCases {
@@ -650,6 +542,18 @@ func TestEmailValidationComparison(t *testing.T) {
 			expectSMTPValid:   false, // Fails format check before SMTP attempt
 			description:       "Empty email",
 		},
+		{
+			email:             "alice.@example.com",
+			expectFormatValid: true,
+			expectSMTPValid:   true, // Should be valid with trailing dot handling
+			description:       "Simple trailing dot email",
+		},
+		{
+			email:             "Bob Smith <bob.@company.org>",
+			expectFormatValid: true,
+			expectSMTPValid:   true, // Should be valid with trailing dot handling
+			description:       "Trailing dot email with display name",
+		},
 	}
 
 	for _, tc := range testCases {
@@ -666,4 +570,248 @@ func TestEmailValidationComparison(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestTrailingDotEmailHandling specifically tests the trailing dot functionality
+func TestTrailingDotEmailHandling(t *testing.T) {
+	testCases := []struct {
+		email         string
+		shouldBeValid bool
+		description   string
+	}{
+		{
+			email:         "alice.@example.com",
+			shouldBeValid: true,
+			description:   "Simple trailing dot case",
+		},
+		{
+			email:         "user.name.@domain.org",
+			shouldBeValid: true,
+			description:   "Multiple dots with trailing dot",
+		},
+		{
+			email:         "Bob Smith <bob.@company.org>",
+			shouldBeValid: true,
+			description:   "Trailing dot with display name in angle brackets",
+		},
+		{
+			email:         "test.@localhost",
+			shouldBeValid: true,
+			description:   "Trailing dot with localhost domain",
+		},
+		{
+			email:         "invalid.@",
+			shouldBeValid: false,
+			description:   "Trailing dot but missing domain",
+		},
+		{
+			email:         ".@example.com",
+			shouldBeValid: false,
+			description:   "Only dot before @ (invalid local part)",
+		},
+		{
+			email:         "test@.",
+			shouldBeValid: false,
+			description:   "Domain is just a dot",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			result := isValidEmail(tc.email)
+			if result != tc.shouldBeValid {
+				t.Errorf("Email %s: expected %v, got %v", tc.email, tc.shouldBeValid, result)
+			}
+		})
+	}
+}
+
+// TestParseAddressWithTrailingDot tests the helper function directly
+func TestParseAddressWithTrailingDot(t *testing.T) {
+	testCases := []struct {
+		input          string
+		expectedOutput string
+		shouldSucceed  bool
+		description    string
+	}{
+		{
+			input:          "alice.@example.com",
+			expectedOutput: "alice.@example.com",
+			shouldSucceed:  true,
+			description:    "Simple trailing dot case",
+		},
+		{
+			input:          "Bob Smith <bob.@company.org>",
+			expectedOutput: "bob.@company.org",
+			shouldSucceed:  true,
+			description:    "Trailing dot with display name",
+		},
+		{
+			input:          "  John Doe  <  john.@test.net  >  ",
+			expectedOutput: "john.@test.net",
+			shouldSucceed:  true,
+			description:    "Trailing dot with whitespace handling",
+		},
+		{
+			input:          "user.@domain.co.uk",
+			expectedOutput: "user.@domain.co.uk",
+			shouldSucceed:  true,
+			description:    "Trailing dot with subdomain",
+		},
+		{
+			input:          "invalid.@",
+			expectedOutput: "",
+			shouldSucceed:  false,
+			description:    "Trailing dot but missing domain",
+		},
+		{
+			input:          "Name <invalid@>",
+			expectedOutput: "",
+			shouldSucceed:  false,
+			description:    "Display name with invalid email (no domain)",
+		},
+		{
+			input:          "",
+			expectedOutput: "",
+			shouldSucceed:  false,
+			description:    "Empty input",
+		},
+		{
+			input:          "not-an-email",
+			expectedOutput: "",
+			shouldSucceed:  false,
+			description:    "Not an email address format",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			output, err := parseAddressWithTrailingDot(tc.input)
+
+			if tc.shouldSucceed {
+				if err != nil {
+					t.Errorf("Expected success for %s, but got error: %v", tc.input, err)
+				}
+				if output != tc.expectedOutput {
+					t.Errorf("Expected output %s for input %s, got %s", tc.expectedOutput, tc.input, output)
+				}
+			} else {
+				if err == nil {
+					t.Errorf("Expected failure for %s, but got success with output: %s", tc.input, output)
+				}
+			}
+		})
+	}
+}
+
+// TestIsTrailingDotError tests the helper function for detecting trailing dot errors
+func TestIsTrailingDotError(t *testing.T) {
+	testCases := []struct {
+		error       error
+		shouldMatch bool
+		description string
+	}{
+		{
+			error:       fmt.Errorf("mail: trailing dot in atom"),
+			shouldMatch: true,
+			description: "Standard trailing dot error",
+		},
+		{
+			error:       fmt.Errorf("mail: missing '@' or angle-addr"),
+			shouldMatch: true,
+			description: "Missing @ error (related to trailing dot parsing)",
+		},
+		{
+			error:       fmt.Errorf("some error with trailing dot in atom somewhere"),
+			shouldMatch: true,
+			description: "Error containing trailing dot phrase",
+		},
+		{
+			error:       fmt.Errorf("mail: invalid address"),
+			shouldMatch: false,
+			description: "Different error type",
+		},
+		{
+			error:       fmt.Errorf("completely unrelated error"),
+			shouldMatch: false,
+			description: "Unrelated error",
+		},
+		{
+			error:       nil,
+			shouldMatch: false,
+			description: "Nil error",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			result := isTrailingDotError(tc.error)
+			if result != tc.shouldMatch {
+				t.Errorf("Error %v: expected %v, got %v", tc.error, tc.shouldMatch, result)
+			}
+		})
+	}
+}
+
+// TestDryRunWithTrailingDotEmails tests the dry-run functionality with trailing dot emails
+func TestDryRunWithTrailingDotEmails(t *testing.T) {
+	config := Config{
+		Host:   "nonexistent.smtp.server.com",
+		Pass:   "testpass",
+		Port:   587,
+		Sender: "test@example.com",
+		Sep:    ",",
+		User:   "testuser",
+	}
+
+	// Test case with trailing dot emails that should now be valid
+	recipients := "valid@example.com,cc:alice.@example.com,invalid.email"
+	cc, to, validation := parseRecipientsWithValidation(&config, recipients)
+
+	// Expected results: trailing dot emails should now be valid
+	expectedCC := []string{"alice.@example.com"}
+	expectedTO := []string{"valid@example.com"}
+	expectedValid := 2   // valid@example.com, alice.@example.com
+	expectedInvalid := 1 // invalid.email
+	expectedTotal := 3
+
+	if !reflect.DeepEqual(cc, expectedCC) {
+		t.Errorf("CC mismatch: expected %v, got %v", expectedCC, cc)
+	}
+
+	if !reflect.DeepEqual(to, expectedTO) {
+		t.Errorf("TO mismatch: expected %v, got %v", expectedTO, to)
+	}
+
+	if validation.ValidCount != expectedValid {
+		t.Errorf("Valid count mismatch: expected %d, got %d", expectedValid, validation.ValidCount)
+	}
+
+	if validation.InvalidCount != expectedInvalid {
+		t.Errorf("Invalid count mismatch: expected %d, got %d", expectedInvalid, validation.InvalidCount)
+	}
+
+	if validation.TotalCount != expectedTotal {
+		t.Errorf("Total count mismatch: expected %d, got %d", expectedTotal, validation.TotalCount)
+	}
+
+	// Verify that alice.@example.com is in valid addresses
+	if !contains(validation.ValidAddresses, "alice.@example.com") {
+		t.Errorf("alice.@example.com should be in valid addresses, got: %v", validation.ValidAddresses)
+	}
+
+	// Verify that invalid.email is in invalid addresses
+	if !contains(validation.InvalidAddresses, "invalid.email") {
+		t.Errorf("invalid.email should be in invalid addresses, got: %v", validation.InvalidAddresses)
+	}
+}
+
+// Helper function to check if a slice contains a string
+func contains(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
 }

@@ -12,6 +12,7 @@ import (
 	"net/smtp"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -319,9 +320,39 @@ func isValidEmail(email string) bool {
 	}
 
 	// First do basic format validation
-	_, err := mail.ParseAddress(email)
+	if _, err := mail.ParseAddress(email); err != nil {
+		// Handle trailing dot case like the go-mail package does
+		// Only apply trailing dot logic if the email actually has a trailing dot pattern
+		if hasTrailingDotPattern(email) && isTrailingDotError(err) {
+			_, parseErr := parseAddressWithTrailingDot(email)
+			return parseErr == nil
+		}
+		return false
+	}
 
-	return err == nil
+	return true
+}
+
+// hasTrailingDotPattern checks if the email has a pattern consistent with trailing dot issues
+func hasTrailingDotPattern(email string) bool {
+	// Look for pattern: something.@domain or "Name <something.@domain>"
+	// Must have exactly one @ symbol
+	if strings.Count(email, "@") != 1 {
+		return false
+	}
+
+	// Handle display name format: "Name <email>"
+	re := regexp.MustCompile(`^.*<(.+?)>.*$`)
+	matches := re.FindStringSubmatch(email)
+	var addressPart string
+	if len(matches) == 2 {
+		addressPart = strings.TrimSpace(matches[1])
+	} else {
+		addressPart = email
+	}
+
+	// Check if there's a dot immediately before the @
+	return strings.Contains(addressPart, ".@")
 }
 
 // nolint:staticcheck
@@ -531,7 +562,8 @@ func removeDuplicates(data []string) []string {
 }
 
 func collectDifference(data, other []string) []string {
-	buf := []string{}
+	var buf []string
+
 	key := make(map[string]bool)
 
 	for _, item := range other {
@@ -547,4 +579,85 @@ func collectDifference(data, other []string) []string {
 	}
 
 	return buf
+}
+
+// isTrailingDotError checks if the error is related to trailing dots in email addresses
+// Example: "Alice <alice.@example.com>"
+// See: https://cs.opensource.google/go/go/+/refs/tags/go1.24.4:src/net/mail/message.go;drc=d14cf8f91b1b9ab5009737b03e6e23cc201cbc22;l=714
+func isTrailingDotError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	errStr := err.Error()
+
+	// Common error messages for trailing dot issues
+	return strings.Contains(errStr, "trailing dot in atom") ||
+		strings.Contains(errStr, "missing '@' or angle-addr")
+}
+
+// parseAddressWithTrailingDot handles email addresses with trailing dots
+// Example: "Alice <alice.@example.com>"
+// See: https://cs.opensource.google/go/go/+/refs/tags/go1.24.4:src/net/mail/message.go;drc=d14cf8f91b1b9ab5009737b03e6e23cc201cbc22;l=714
+func parseAddressWithTrailingDot(field string) (string, error) {
+	field = strings.TrimSpace(field)
+
+	// Check if it's in "Name <email>" format
+	re := regexp.MustCompile(`^(.+?)\s*<(.+?)>$`)
+	matches := re.FindStringSubmatch(field)
+
+	if len(matches) == 3 {
+		// Found name and email in angle brackets
+		address := strings.TrimSpace(matches[2])
+		// Validate the extracted email address
+		if !isValidTrailingDotAddress(address) {
+			return "", fmt.Errorf("invalid address %q", field)
+		}
+		return address, nil
+	}
+
+	// Check if it's just an email address
+	if !isValidTrailingDotAddress(field) {
+		return "", fmt.Errorf("invalid address %q", field)
+	}
+
+	return field, nil
+}
+
+// isValidTrailingDotAddress validates that the address has the proper structure
+// for a trailing dot email (local.@domain format)
+func isValidTrailingDotAddress(address string) bool {
+	// Must contain exactly one @
+	atCount := strings.Count(address, "@")
+	if atCount != 1 {
+		return false
+	}
+
+	parts := strings.Split(address, "@")
+	if len(parts) != 2 {
+		return false
+	}
+
+	local := parts[0]
+	domain := parts[1]
+
+	// Local part cannot be empty, cannot start with dot, but can end with dot
+	if local == "" || strings.HasPrefix(local, ".") {
+		return false
+	}
+
+	// Domain part cannot be empty, cannot be just a dot, cannot start/end with dot
+	if domain == "" || domain == "." || strings.HasPrefix(domain, ".") || strings.HasSuffix(domain, ".") {
+		return false
+	}
+
+	// Domain must contain at least one dot (for valid TLD structure)
+	if !strings.Contains(domain, ".") {
+		// Allow localhost and similar single-name domains
+		if domain != "localhost" && len(domain) < 2 {
+			return false
+		}
+	}
+
+	return true
 }

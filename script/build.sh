@@ -1,7 +1,7 @@
 #!/bin/bash
 
 buildTime=$(date +%FT%T%z)
-commitID=`git rev-parse --short=7 HEAD`
+commitID=$(git rev-parse --short=7 HEAD)
 ldflags="-s -w -X main.BuildTime=$buildTime -X main.CommitID=$commitID"
 target="sender"
 
