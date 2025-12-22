@@ -97,6 +97,50 @@ func TestParseRecipients(t *testing.T) {
 	if len(cc4) != 1 || len(to4) != 1 {
 		t.Errorf("FAIL: Expected 1 CC and 1 TO after deduplication, got %d CC and %d TO", len(cc4), len(to4))
 	}
+
+	// Test case 5: Whitespace handling - leading/trailing spaces should be trimmed
+	recipients5 := " alice@example.com , cc:bob@example.com , charlie@example.com "
+	cc5, to5 := parseRecipients(&config, recipients5)
+	if len(cc5) != 1 || len(to5) != 2 {
+		t.Errorf("FAIL: Expected 1 CC and 2 TO with whitespace trimming, got %d CC and %d TO", len(cc5), len(to5))
+	}
+	// Verify bob is in CC, not in TO
+	foundBobInCC := false
+	for _, email := range cc5 {
+		if email == "bob@example.com" {
+			foundBobInCC = true
+			break
+		}
+	}
+	if !foundBobInCC {
+		t.Error("FAIL: Expected bob@example.com in CC after trimming whitespace")
+	}
+
+	// Test case 6: The bug case - 'invalid@example,cc:jia.jia@example.com'
+	// The cc: prefix should be detected correctly even with no space after comma
+	recipients6 := "invalid@example.com,cc:jia.jia@example.com"
+	cc6, to6 := parseRecipients(&config, recipients6)
+	if len(cc6) != 1 || len(to6) != 1 {
+		t.Errorf("FAIL: Expected 1 CC and 1 TO, got %d CC and %d TO", len(cc6), len(to6))
+	}
+	// Verify jia.jia is in CC
+	foundJiaInCC := false
+	for _, email := range cc6 {
+		if email == "jia.jia@example.com" {
+			foundJiaInCC = true
+			break
+		}
+	}
+	if !foundJiaInCC {
+		t.Error("FAIL: Expected jia.jia@example.com in CC, not in TO")
+	}
+
+	// Test case 7: Mixed whitespace scenarios
+	recipients7 := "alice@example.com,  cc:bob@example.com,cc: charlie@example.com , cc:  david@example.com"
+	cc7, to7 := parseRecipients(&config, recipients7)
+	if len(cc7) != 3 || len(to7) != 1 {
+		t.Errorf("FAIL: Expected 3 CC and 1 TO with various whitespace patterns, got %d CC and %d TO", len(cc7), len(to7))
+	}
 }
 
 func TestSendMail(t *testing.T) {
@@ -1244,6 +1288,139 @@ func TestParseRecipientsDeduplication(t *testing.T) {
 			}
 			if len(to) != tc.expectedTO {
 				t.Errorf("%s: expected %d TO addresses, got %d", tc.description, tc.expectedTO, len(to))
+			}
+		})
+	}
+}
+
+// TestParseRecipientsWhitespace tests that parseRecipients correctly handles
+// whitespace around separators and prefixes
+func TestParseRecipientsWhitespace(t *testing.T) {
+	config := Config{
+		Sep: ",",
+	}
+
+	testCases := []struct {
+		name        string
+		recipients  string
+		expectedCC  []string
+		expectedTO  []string
+		description string
+	}{
+		{
+			name:        "no_whitespace",
+			recipients:  "alice@example.com,cc:bob@example.com",
+			expectedCC:  []string{"bob@example.com"},
+			expectedTO:  []string{"alice@example.com"},
+			description: "Basic case without whitespace",
+		},
+		{
+			name:        "whitespace_after_comma",
+			recipients:  "alice@example.com, cc:bob@example.com",
+			expectedCC:  []string{"bob@example.com"},
+			expectedTO:  []string{"alice@example.com"},
+			description: "Space after comma should be trimmed, cc: prefix should still be detected",
+		},
+		{
+			name:        "whitespace_before_comma",
+			recipients:  "alice@example.com ,cc:bob@example.com",
+			expectedCC:  []string{"bob@example.com"},
+			expectedTO:  []string{"alice@example.com"},
+			description: "Space before comma should be trimmed",
+		},
+		{
+			name:        "whitespace_both_sides",
+			recipients:  "alice@example.com , cc:bob@example.com , charlie@example.com",
+			expectedCC:  []string{"bob@example.com"},
+			expectedTO:  []string{"alice@example.com", "charlie@example.com"},
+			description: "Spaces around commas should be trimmed",
+		},
+		{
+			name:        "whitespace_after_cc_prefix",
+			recipients:  "alice@example.com,cc: bob@example.com",
+			expectedCC:  []string{"bob@example.com"},
+			expectedTO:  []string{"alice@example.com"},
+			description: "Space after cc: prefix should be trimmed from email",
+		},
+		{
+			name:        "whitespace_before_cc_prefix",
+			recipients:  "alice@example.com,  cc:bob@example.com",
+			expectedCC:  []string{"bob@example.com"},
+			expectedTO:  []string{"alice@example.com"},
+			description: "Multiple spaces before cc: prefix should be trimmed, prefix should be detected",
+		},
+		{
+			name:        "bug_case_invalid_email_with_cc",
+			recipients:  "invalid@example,cc:jia.jia@example.com",
+			expectedCC:  []string{"jia.jia@example.com"},
+			expectedTO:  []string{"invalid@example"},
+			description: "The reported bug: cc: prefix should be detected even without space after comma",
+		},
+		{
+			name:        "leading_trailing_whitespace",
+			recipients:  "  alice@example.com  ,  cc:bob@example.com  ",
+			expectedCC:  []string{"bob@example.com"},
+			expectedTO:  []string{"alice@example.com"},
+			description: "Leading and trailing whitespace on entire string should be handled",
+		},
+		{
+			name:        "multiple_spaces_in_various_positions",
+			recipients:  " alice@example.com ,  cc:bob@example.com , cc:  charlie@example.com  ,  david@example.com ",
+			expectedCC:  []string{"bob@example.com", "charlie@example.com"},
+			expectedTO:  []string{"alice@example.com", "david@example.com"},
+			description: "Mixed whitespace patterns should all be handled correctly",
+		},
+		{
+			name:        "empty_entries_with_whitespace",
+			recipients:  "alice@example.com, , ,cc:bob@example.com",
+			expectedCC:  []string{"bob@example.com"},
+			expectedTO:  []string{"alice@example.com"},
+			description: "Empty entries (just commas) should be ignored",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			cc, to := parseRecipients(&config, tc.recipients)
+
+			// Check counts
+			if len(cc) != len(tc.expectedCC) {
+				t.Errorf("%s: expected %d CC addresses, got %d. CC=%v",
+					tc.description, len(tc.expectedCC), len(cc), cc)
+			}
+			if len(to) != len(tc.expectedTO) {
+				t.Errorf("%s: expected %d TO addresses, got %d. TO=%v",
+					tc.description, len(tc.expectedTO), len(to), to)
+			}
+
+			// Check specific addresses in CC
+			for _, expectedEmail := range tc.expectedCC {
+				found := false
+				for _, actualEmail := range cc {
+					if actualEmail == expectedEmail {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Errorf("%s: expected %s in CC list, but not found. CC=%v",
+						tc.description, expectedEmail, cc)
+				}
+			}
+
+			// Check specific addresses in TO
+			for _, expectedEmail := range tc.expectedTO {
+				found := false
+				for _, actualEmail := range to {
+					if actualEmail == expectedEmail {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Errorf("%s: expected %s in TO list, but not found. TO=%v",
+						tc.description, expectedEmail, to)
+				}
 			}
 		})
 	}

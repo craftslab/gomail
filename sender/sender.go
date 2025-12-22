@@ -257,11 +257,12 @@ func parseContentType(data string) (string, error) {
 func parseRecipients(config *Config, data string) (cc, to []string) {
 	buf := strings.Split(data, config.Sep)
 	for _, item := range buf {
+		item = strings.TrimSpace(item)
 		if item != "" {
 			if hasPrefix := strings.HasPrefix(item, "cc:"); hasPrefix {
-				buf := strings.ReplaceAll(item, "cc:", "")
-				if buf != "" {
-					cc = append(cc, buf)
+				email := strings.TrimSpace(strings.ReplaceAll(item, "cc:", ""))
+				if email != "" {
+					cc = append(cc, email)
 				}
 			} else {
 				to = append(to, item)
