@@ -815,3 +815,436 @@ func contains(slice []string, item string) bool {
 	}
 	return false
 }
+
+// TestRecipientFilteringPreservesDistinction tests that filtering invalid recipients
+// preserves the cc/to distinction
+func TestRecipientFilteringPreservesDistinction(t *testing.T) {
+	config := Config{
+		Host:   "nonexistent.smtp.server.com",
+		Pass:   "testpass",
+		Port:   587,
+		Sender: "test@example.com",
+		Sep:    ",",
+		User:   "testuser",
+	}
+
+	testCases := []struct {
+		name        string
+		recipients  string
+		expectedCC  []string
+		expectedTO  []string
+		description string
+	}{
+		{
+			name:        "invalid_to_valid_cc",
+			recipients:  "invalid@,cc:valid@example.com",
+			expectedCC:  []string{"valid@example.com"},
+			expectedTO:  []string{},
+			description: "Invalid TO with valid CC should preserve CC",
+		},
+		{
+			name:        "invalid_to_multiple_valid_cc",
+			recipients:  "invalid@,cc:jia.jia@zte.com.cn,cc:zhang.san@zte.com.cn",
+			expectedCC:  []string{"jia.jia@zte.com.cn", "zhang.san@zte.com.cn"},
+			expectedTO:  []string{},
+			description: "Invalid TO with multiple valid CC should preserve all CC",
+		},
+		{
+			name:        "valid_to_and_cc",
+			recipients:  "valid.to@example.com,cc:valid.cc@example.com",
+			expectedCC:  []string{"valid.cc@example.com"},
+			expectedTO:  []string{"valid.to@example.com"},
+			description: "Both valid TO and CC should be preserved",
+		},
+		{
+			name:        "multiple_invalid_to_valid_cc",
+			recipients:  "invalid1@,invalid2@,cc:valid@example.com",
+			expectedCC:  []string{"valid@example.com"},
+			expectedTO:  []string{},
+			description: "Multiple invalid TO with valid CC should preserve CC",
+		},
+		{
+			name:        "mixed_valid_invalid_to_and_cc",
+			recipients:  "valid.to@example.com,invalid@,cc:valid.cc@example.com,cc:invalid@",
+			expectedCC:  []string{"valid.cc@example.com"},
+			expectedTO:  []string{"valid.to@example.com"},
+			description: "Mixed valid/invalid in both TO and CC should filter correctly",
+		},
+		{
+			name:        "trailing_dot_emails",
+			recipients:  "alice.@example.com,cc:bob.@company.org",
+			expectedCC:  []string{"bob.@company.org"},
+			expectedTO:  []string{"alice.@example.com"},
+			description: "Trailing dot emails should be valid and preserved",
+		},
+		{
+			name:        "invalid_to_trailing_dot_cc",
+			recipients:  "invalid@,cc:alice.@example.com",
+			expectedCC:  []string{"alice.@example.com"},
+			expectedTO:  []string{},
+			description: "Invalid TO with trailing dot CC should preserve CC",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			cc, to, _ := parseRecipientsWithValidation(&config, tc.recipients)
+
+			if !reflect.DeepEqual(cc, tc.expectedCC) {
+				t.Errorf("%s: CC mismatch\nExpected: %v\nGot: %v", tc.description, tc.expectedCC, cc)
+			}
+
+			if !reflect.DeepEqual(to, tc.expectedTO) {
+				t.Errorf("%s: TO mismatch\nExpected: %v\nGot: %v", tc.description, tc.expectedTO, to)
+			}
+		})
+	}
+}
+
+// TestSMTPRecipientExists tests the SMTP recipient validation function
+func TestSMTPRecipientExists(t *testing.T) {
+	config := Config{
+		Host:   "nonexistent.smtp.server.com",
+		Pass:   "testpass",
+		Port:   587,
+		Sender: "test@example.com",
+		Sep:    ",",
+		User:   "testuser",
+	}
+
+	testCases := []struct {
+		email       string
+		description string
+	}{
+		{
+			email:       "invalid.email",
+			description: "Invalid format should return false",
+		},
+		{
+			email:       "@example.com",
+			description: "Missing local part should return false",
+		},
+		{
+			email:       "test@",
+			description: "Missing domain should return false",
+		},
+		{
+			email:       "",
+			description: "Empty email should return false",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			result := smtpRecipientExists(&config, tc.email)
+			// Invalid format emails should always return false
+			if tc.email == "" || !isValidEmail(tc.email) {
+				if result != false {
+					t.Errorf("%s: expected false for %s, got %v", tc.description, tc.email, result)
+				}
+			}
+			// Note: For valid format emails with non-existent server,
+			// the function returns true to avoid false negatives
+		})
+	}
+}
+
+// TestHasTrailingDotPattern tests the helper function for detecting trailing dot patterns
+func TestHasTrailingDotPattern(t *testing.T) {
+	testCases := []struct {
+		email             string
+		shouldHavePattern bool
+		description       string
+	}{
+		{
+			email:             "alice.@example.com",
+			shouldHavePattern: true,
+			description:       "Simple trailing dot case",
+		},
+		{
+			email:             "Bob Smith <bob.@company.org>",
+			shouldHavePattern: true,
+			description:       "Trailing dot with display name",
+		},
+		{
+			email:             "user.@domain.co.uk",
+			shouldHavePattern: true,
+			description:       "Trailing dot with subdomain",
+		},
+		{
+			email:             "normal@example.com",
+			shouldHavePattern: false,
+			description:       "Normal email without trailing dot",
+		},
+		{
+			email:             "test.name@domain.org",
+			shouldHavePattern: false,
+			description:       "Dots in local part but not trailing",
+		},
+		{
+			email:             "invalid.email",
+			shouldHavePattern: false,
+			description:       "No @ symbol",
+		},
+		{
+			email:             "test@@example.com",
+			shouldHavePattern: false,
+			description:       "Multiple @ symbols",
+		},
+		{
+			email:             "",
+			shouldHavePattern: false,
+			description:       "Empty email",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			result := hasTrailingDotPattern(tc.email)
+			if result != tc.shouldHavePattern {
+				t.Errorf("Email %s: expected %v, got %v", tc.email, tc.shouldHavePattern, result)
+			}
+		})
+	}
+}
+
+// TestIsValidTrailingDotAddress tests the validation for trailing dot addresses
+func TestIsValidTrailingDotAddress(t *testing.T) {
+	testCases := []struct {
+		address       string
+		shouldBeValid bool
+		description   string
+	}{
+		{
+			address:       "alice.@example.com",
+			shouldBeValid: true,
+			description:   "Valid trailing dot address",
+		},
+		{
+			address:       "user.name.@domain.org",
+			shouldBeValid: true,
+			description:   "Multiple dots with trailing dot",
+		},
+		{
+			address:       "test.@localhost",
+			shouldBeValid: true,
+			description:   "Trailing dot with localhost",
+		},
+		{
+			address:       "a.@b.co",
+			shouldBeValid: true,
+			description:   "Minimal trailing dot address",
+		},
+		{
+			address:       "invalid.@",
+			shouldBeValid: false,
+			description:   "Trailing dot but missing domain",
+		},
+		{
+			address:       ".@example.com",
+			shouldBeValid: false,
+			description:   "Local part starts with dot",
+		},
+		{
+			address:       "test@.",
+			shouldBeValid: false,
+			description:   "Domain is just a dot",
+		},
+		{
+			address:       "@example.com",
+			shouldBeValid: false,
+			description:   "Missing local part",
+		},
+		{
+			address:       "test@",
+			shouldBeValid: false,
+			description:   "Missing domain",
+		},
+		{
+			address:       "test.@example.com.",
+			shouldBeValid: false,
+			description:   "Domain ends with dot",
+		},
+		{
+			address:       "test.@.example.com",
+			shouldBeValid: false,
+			description:   "Domain starts with dot",
+		},
+		{
+			address:       "",
+			shouldBeValid: false,
+			description:   "Empty address",
+		},
+		{
+			address:       "test@@example.com",
+			shouldBeValid: false,
+			description:   "Multiple @ symbols",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			result := isValidTrailingDotAddress(tc.address)
+			if result != tc.shouldBeValid {
+				t.Errorf("Address %s: expected %v, got %v", tc.address, tc.shouldBeValid, result)
+			}
+		})
+	}
+}
+
+// TestRemoveDuplicatesEdgeCases tests edge cases for duplicate removal
+func TestRemoveDuplicatesEdgeCases(t *testing.T) {
+	testCases := []struct {
+		input       []string
+		expected    []string
+		description string
+	}{
+		{
+			input:       nil,
+			expected:    []string{},
+			description: "Nil input should return empty slice",
+		},
+		{
+			input:       []string{},
+			expected:    []string{},
+			description: "Empty input should return empty slice",
+		},
+		{
+			input:       []string{"a@example.com"},
+			expected:    []string{"a@example.com"},
+			description: "Single item should return as is",
+		},
+		{
+			input:       []string{"a@example.com", "a@example.com", "a@example.com"},
+			expected:    []string{"a@example.com"},
+			description: "All duplicates should return single item",
+		},
+		{
+			input:       []string{"a@example.com", "b@example.com", "a@example.com", "c@example.com", "b@example.com"},
+			expected:    []string{"a@example.com", "b@example.com", "c@example.com"},
+			description: "Mixed duplicates should be removed while preserving order",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			result := removeDuplicates(tc.input)
+			if !reflect.DeepEqual(result, tc.expected) {
+				t.Errorf("Expected %v, got %v", tc.expected, result)
+			}
+		})
+	}
+}
+
+// TestCollectDifferenceEdgeCases tests edge cases for difference collection
+func TestCollectDifferenceEdgeCases(t *testing.T) {
+	testCases := []struct {
+		data        []string
+		other       []string
+		expected    []string
+		description string
+	}{
+		{
+			data:        []string{},
+			other:       []string{},
+			expected:    nil,
+			description: "Both empty should return nil",
+		},
+		{
+			data:        []string{"a@example.com"},
+			other:       []string{},
+			expected:    []string{"a@example.com"},
+			description: "Empty other should return all data",
+		},
+		{
+			data:        []string{},
+			other:       []string{"a@example.com"},
+			expected:    nil,
+			description: "Empty data should return nil",
+		},
+		{
+			data:        []string{"a@example.com", "b@example.com"},
+			other:       []string{"a@example.com", "b@example.com"},
+			expected:    nil,
+			description: "Identical sets should return nil",
+		},
+		{
+			data:        []string{"a@example.com", "b@example.com", "c@example.com"},
+			other:       []string{"a@example.com"},
+			expected:    []string{"b@example.com", "c@example.com"},
+			description: "Should return items in data but not in other",
+		},
+		{
+			data:        []string{"a@example.com", "b@example.com"},
+			other:       []string{"c@example.com", "d@example.com"},
+			expected:    []string{"a@example.com", "b@example.com"},
+			description: "No overlap should return all data",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			result := collectDifference(tc.data, tc.other)
+			if !reflect.DeepEqual(result, tc.expected) {
+				t.Errorf("Expected %v, got %v", tc.expected, result)
+			}
+		})
+	}
+}
+
+// TestParseRecipientsDeduplication tests that parseRecipients properly deduplicates
+// and handles cc/to distinction
+func TestParseRecipientsDeduplication(t *testing.T) {
+	config := Config{
+		Sep: ",",
+	}
+
+	testCases := []struct {
+		name        string
+		recipients  string
+		expectedCC  int
+		expectedTO  int
+		description string
+	}{
+		{
+			name:        "duplicate_in_to",
+			recipients:  "alice@example.com,alice@example.com,bob@example.com",
+			expectedCC:  0,
+			expectedTO:  2,
+			description: "Duplicates in TO should be removed",
+		},
+		{
+			name:        "duplicate_in_cc",
+			recipients:  "cc:alice@example.com,cc:alice@example.com,cc:bob@example.com",
+			expectedCC:  2,
+			expectedTO:  0,
+			description: "Duplicates in CC should be removed",
+		},
+		{
+			name:        "same_address_in_to_and_cc",
+			recipients:  "alice@example.com,cc:alice@example.com",
+			expectedCC:  0,
+			expectedTO:  1,
+			description: "Same address in TO and CC should appear only in TO",
+		},
+		{
+			name:        "multiple_duplicates_across_to_and_cc",
+			recipients:  "alice@example.com,bob@example.com,cc:alice@example.com,cc:bob@example.com,cc:charlie@example.com",
+			expectedCC:  1,
+			expectedTO:  2,
+			description: "Addresses in both TO and CC should be removed from CC",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			cc, to := parseRecipients(&config, tc.recipients)
+			if len(cc) != tc.expectedCC {
+				t.Errorf("%s: expected %d CC addresses, got %d", tc.description, tc.expectedCC, len(cc))
+			}
+			if len(to) != tc.expectedTO {
+				t.Errorf("%s: expected %d TO addresses, got %d", tc.description, tc.expectedTO, len(to))
+			}
+		})
+	}
+}

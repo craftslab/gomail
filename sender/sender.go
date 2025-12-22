@@ -390,7 +390,7 @@ func smtpRecipientExists(config *Config, email string) bool {
 		return false
 	}
 
-	address := fmt.Sprintf("%s:%d", config.Host, config.Port)
+	address := net.JoinHostPort(config.Host, fmt.Sprintf("%d", config.Port))
 
 	// Try implicit TLS first when port is 465
 	if config.Port == 465 {
