@@ -107,6 +107,23 @@ func main() {
 
 	cc, to = parseRecipients(&config, *recipients)
 
+	// Validate and filter recipients (unless in dry-run mode which does its own validation)
+	if !*dryRun {
+		var validCc, validTo []string
+		for _, addr := range cc {
+			if isValidEmail(addr) && smtpRecipientExists(&config, addr) {
+				validCc = append(validCc, addr)
+			}
+		}
+		for _, addr := range to {
+			if isValidEmail(addr) && smtpRecipientExists(&config, addr) {
+				validTo = append(validTo, addr)
+			}
+		}
+		cc = validCc
+		to = validTo
+	}
+
 	if len(cc) == 0 && len(to) == 0 {
 		if *dryRun {
 			_, _, validation := parseRecipientsWithValidation(&config, *recipients)
