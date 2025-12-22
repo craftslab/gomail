@@ -1,3 +1,5 @@
+<div align="center">
+
 # gomail
 
 [![Actions Status](https://github.com/craftslab/gomail/workflows/ci/badge.svg?branch=main&event=push)](https://github.com/craftslab/gomail/actions?query=workflow%3Aci)
@@ -5,41 +7,54 @@
 [![License](https://img.shields.io/github/license/craftslab/gomail.svg?color=brightgreen)](https://github.com/craftslab/gomail/blob/main/LICENSE)
 [![Tag](https://img.shields.io/github/tag/craftslab/gomail.svg?color=brightgreen)](https://github.com/craftslab/gomail/tags)
 
+**A powerful and flexible mail sender written in Go**
 
+[English](README.md) | [简体中文](README_cn.md)
 
-## Introduction
+</div>
 
-*gomail* is a mail sender written in Go.
+---
 
+## 📖 Introduction
 
+**gomail** is a robust mail sending utility written in Go, designed to simplify email delivery with support for attachments, templates, and flexible recipient management.
 
-## Prerequisites
+## ⚙️ Prerequisites
 
-- Go >= 1.24.0
+- **Go** >= 1.24.0
 
+## ✨ Features
 
+**gomail** provides comprehensive email functionality:
 
-## Features
+- 📎 **Attachments** - Send multiple file attachments with ease
+- 📝 **HTML and Text Templates** - Support for both HTML and plain text content
+- 👥 **Recipient Management** - Advanced recipient parsing with CC support
+- 🔍 **Filtering** - Email domain filtering capabilities
+- 🧪 **Dry Run Mode** - Validate recipients without sending
 
-*gomail* supports:
+## 🚀 Quick Start
 
-- Attachments
-- HTML and text templates
-
-
-
-## Build
+### Build from Source
 
 ```bash
+# Clone the repository
 git clone https://github.com/craftslab/gomail.git
 
+# Navigate to the project directory
 cd gomail
+
+# Build the project
 make build
 ```
 
+The compiled binaries will be available in the `bin/` directory.
 
+## 📋 Usage
 
-## Run
+### Parser Tool
+
+Parse and filter recipient email addresses:
 
 ```bash
 ./parser \
@@ -47,6 +62,10 @@ make build
   --filter="@example1.com,@example2.com" \
   --recipients="alen,cc:bob@example.com"
 ```
+
+### Sender Tool
+
+Send emails with various options:
 
 ```bash
 ./sender \
@@ -59,9 +78,11 @@ make build
   --title="TITLE"
 ```
 
+## 📚 Command Line Reference
 
+### Parser Command
 
-## Usage
+**Description:** Parse and filter email recipients
 
 ```bash
 usage: parser --recipients=RECIPIENTS [<flags>]
@@ -76,6 +97,10 @@ Flags:
   -f, --filter=FILTER          Filter list, format: @example1.com,@example2.com
   -r, --recipients=RECIPIENTS  Recipients list, format: alen,cc:bob@example.com
 ```
+
+### Sender Command
+
+**Description:** Send emails with attachments and templates
 
 ```bash
 usage: sender --recipients=RECIPIENTS [<flags>]
@@ -99,14 +124,18 @@ Flags:
                                  do not send
 ```
 
+## 📄 License
 
+This project is licensed under the terms specified in the [LICENSE](LICENSE) file.
 
-## License
+## 🔗 Related Projects
 
-Project License can be found [here](LICENSE).
+- [rsmail](https://github.com/craftslab/rsmail) - Related mail project
 
+---
 
+<div align="center">
 
-## Reference
+Made with ❤️ by [craftslab](https://github.com/craftslab)
 
-- [rsmail](https://github.com/craftslab/rsmail)
+</div>
