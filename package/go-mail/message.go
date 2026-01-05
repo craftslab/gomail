@@ -137,6 +137,7 @@ func (m *Message) FormatAddress(address, name string) string {
 		return address
 	}
 
+	m.buf.Reset() // Reset buffer before use to ensure it's clean
 	enc := m.encodeString(name)
 	if enc == name {
 		m.buf.WriteByte('"')

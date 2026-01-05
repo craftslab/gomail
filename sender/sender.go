@@ -40,7 +40,7 @@ type Mail struct {
 	Body        string
 	Cc          []string
 	ContentType string
-	From        string
+	From        string // Sender display name (from --header option)
 	Subject     string
 	To          []string
 }
@@ -70,7 +70,7 @@ var (
 	config      = app.Flag("config", "Config file, format: .json").Short('c').String()
 	contentType = app.Flag("content_type", "Content type, format: HTML or PLAIN_TEXT (default)").
 			Short('e').Default("PLAIN_TEXT").Enum("HTML", "PLAIN_TEXT")
-	header     = app.Flag("header", "Header text").Short('r').String()
+	header     = app.Flag("header", "Sender display name (used with sender address from config file)").Short('r').String()
 	recipients = app.Flag("recipients", "Recipients list, format: alen@example.com,cc:bob@example.com").Short('p').Required().String()
 	title      = app.Flag("title", "Title text").Short('t').String()
 	dryRun     = app.Flag("dry-run", "Only output recipient validation JSON and exit; do not send").Short('n').Bool()
@@ -479,6 +479,8 @@ func rcptAcceptedTLS(tlsConn net.Conn, config *Config, email string) bool {
 
 func sendMail(config *Config, data *Mail) error {
 	msg := gomail.NewMessage()
+	// Set From header: config.Sender as email address, data.From (--header) as display name
+	// Result format: "Display Name" <sender@example.com> or sender@example.com (if no display name)
 	msg.SetAddressHeader("From", config.Sender, data.From)
 	msg.SetHeader("Cc", data.Cc...)
 	msg.SetHeader("Subject", data.Subject)

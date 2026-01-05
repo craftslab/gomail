@@ -824,3 +824,95 @@ func BenchmarkFull(b *testing.B) {
 		m.Reset()
 	}
 }
+
+// TestFormatAddressBufferReset tests that FormatAddress properly resets the buffer
+// before use to prevent previous content from affecting the result
+func TestFormatAddressBufferReset(t *testing.T) {
+	m := NewMessage()
+
+	// Test multiple consecutive calls to ensure buffer is clean each time
+	tests := []struct {
+		address string
+		name    string
+		want    string
+	}{
+		{"test1@example.com", "Test User 1", `"Test User 1" <test1@example.com>`},
+		{"test2@example.com", "Another User", `"Another User" <test2@example.com>`},
+		{"test3@example.com", "", "test3@example.com"},
+		{"test4@example.com", "User Four", `"User Four" <test4@example.com>`},
+		{"test5@example.com", "X", `"X" <test5@example.com>`},
+	}
+
+	for i, tt := range tests {
+		got := m.FormatAddress(tt.address, tt.name)
+		if got != tt.want {
+			t.Errorf("Test %d: FormatAddress(%q, %q) = %q, want %q", i, tt.address, tt.name, got, tt.want)
+		}
+	}
+}
+
+// TestFormatAddressWithSpecialChars tests FormatAddress with special characters
+func TestFormatAddressWithSpecialChars(t *testing.T) {
+	m := NewMessage()
+
+	tests := []struct {
+		address string
+		name    string
+		desc    string
+	}{
+		{"user@example.com", "User, Name", "name with comma"},
+		{"user@example.com", "User \"Quoted\"", "name with quotes"},
+		{"user@example.com", "User (Comment)", "name with parentheses"},
+		{"user@example.com", "User <Tag>", "name with angle brackets"},
+		{"user@example.com", "Señor From", "name with accents"},
+	}
+
+	for _, tt := range tests {
+		got := m.FormatAddress(tt.address, tt.name)
+		// Should not be empty and should contain the address
+		if got == "" {
+			t.Errorf("%s: FormatAddress returned empty string", tt.desc)
+		}
+		if !strings.Contains(got, tt.address) {
+			t.Errorf("%s: FormatAddress result %q does not contain address %q", tt.desc, got, tt.address)
+		}
+	}
+}
+
+// TestSetAddressHeaderMultipleCalls tests that SetAddressHeader works correctly
+// with multiple consecutive calls
+func TestSetAddressHeaderMultipleCalls(t *testing.T) {
+	m := NewMessage()
+
+	// Set From header multiple times
+	m.SetAddressHeader("From", "sender1@example.com", "Sender One")
+	m.SetAddressHeader("To", "recipient1@example.com", "Recipient One")
+	m.SetAddressHeader("Cc", "cc1@example.com", "CC One")
+
+	// Verify headers are set correctly
+	if len(m.header["From"]) != 1 {
+		t.Errorf("Expected 1 From header, got %d", len(m.header["From"]))
+	}
+	if len(m.header["To"]) != 1 {
+		t.Errorf("Expected 1 To header, got %d", len(m.header["To"]))
+	}
+	if len(m.header["Cc"]) != 1 {
+		t.Errorf("Expected 1 Cc header, got %d", len(m.header["Cc"]))
+	}
+
+	// Verify each header contains the expected address
+	if !strings.Contains(m.header["From"][0], "sender1@example.com") {
+		t.Errorf("From header does not contain expected address: %s", m.header["From"][0])
+	}
+	if !strings.Contains(m.header["To"][0], "recipient1@example.com") {
+		t.Errorf("To header does not contain expected address: %s", m.header["To"][0])
+	}
+	if !strings.Contains(m.header["Cc"][0], "cc1@example.com") {
+		t.Errorf("Cc header does not contain expected address: %s", m.header["Cc"][0])
+	}
+
+	// Verify display names are included when provided
+	if !strings.Contains(m.header["From"][0], "Sender One") {
+		t.Errorf("From header does not contain expected name: %s", m.header["From"][0])
+	}
+}

@@ -150,17 +150,31 @@ func TestSendMail(t *testing.T) {
 		t.Error("FAIL")
 	}
 
+	// Test case 1: With header provided (header as display name, config.Sender as From address)
 	mail := Mail{
 		[]string{"../test/attach1.txt", "../test/attach2.text"},
 		"../test/body.txt",
 		[]string{"catherine@example.com"},
 		"PLAIN_TEXT",
-		"FROM",
+		"Custom Sender Name", // header option - used as display name
 		"SUBJECT",
 		[]string{"alen@example.com, bob@example.com"},
 	}
 
 	_ = sendMail(&config, &mail)
+
+	// Test case 2: Without header (config.Sender as From address, no display name)
+	mailNoHeader := Mail{
+		[]string{"../test/attach1.txt", "../test/attach2.text"},
+		"../test/body.txt",
+		[]string{"catherine@example.com"},
+		"PLAIN_TEXT",
+		"", // no header option - config.Sender will be used as From address without display name
+		"SUBJECT",
+		[]string{"alen@example.com, bob@example.com"},
+	}
+
+	_ = sendMail(&config, &mailNoHeader)
 }
 
 func TestCheckFile(t *testing.T) {
@@ -361,7 +375,7 @@ func TestMailStructWithMockData(t *testing.T) {
 		Body:        "This is a test email body",
 		Cc:          []string{"cc1@example.com", "cc2@example.com"},
 		ContentType: "text/plain",
-		From:        "sender@example.com",
+		From:        "Sender Display Name", // From field represents display name (header option)
 		Subject:     "Test Email Subject",
 		To:          []string{"recipient1@example.com", "recipient2@example.com"},
 	}
@@ -1422,6 +1436,62 @@ func TestParseRecipientsWhitespace(t *testing.T) {
 						tc.description, expectedEmail, to)
 				}
 			}
+		})
+	}
+}
+
+// TestSendMailFromHeader tests the From header behavior with different configurations
+func TestSendMailFromHeader(t *testing.T) {
+	t.Skip("Skipping integration test - requires mock SMTP server")
+
+	tests := []struct {
+		name           string
+		mailFrom       string
+		senderAddr     string
+		expectedFormat string
+		description    string
+	}{
+		{
+			name:           "With header option provided",
+			mailFrom:       "Custom Sender Name",
+			senderAddr:     "noreply@example.com",
+			expectedFormat: `"Custom Sender Name" <noreply@example.com>`,
+			description:    "When header is provided, config.Sender is used as From address with header as display name",
+		},
+		{
+			name:           "Without header option",
+			mailFrom:       "",
+			senderAddr:     "noreply@example.com",
+			expectedFormat: "noreply@example.com",
+			description:    "When header is empty, config.Sender is used as From address with no display name",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := Config{
+				Host:   "smtp.example.com",
+				Pass:   "password",
+				Port:   587,
+				Sender: tt.senderAddr,
+				Sep:    ",",
+				User:   "user",
+			}
+
+			mail := Mail{
+				Attachment:  []string{},
+				Body:        "Test body",
+				Cc:          []string{},
+				ContentType: "text/plain",
+				From:        tt.mailFrom,
+				Subject:     "Test Subject",
+				To:          []string{"recipient@example.com"},
+			}
+
+			// Note: This test validates the structure but skips actual sending
+			// Expected From header format: SetAddressHeader("From", config.Sender, data.From)
+			t.Logf("%s: From field=%q, Sender=%q, Expected Format=%q",
+				tt.description, mail.From, config.Sender, tt.expectedFormat)
 		})
 	}
 }

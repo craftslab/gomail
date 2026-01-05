@@ -73,10 +73,12 @@ make build
   --attachment="attach1.txt,attach2.txt" \
   --body="body.txt" \
   --content_type="PLAIN_TEXT" \
-  --header="HEADER" \
+  --header="您的名字" \
   --recipients="alen@example.com,bob@example.com,cc:catherine@example.com" \
   --title="TITLE"
 ```
+
+**注意：** `--header` 选项指定发件人的显示名称。实际的 From 邮箱地址取自配置文件中的 `sender` 字段。例如，如果配置文件包含 `"sender": "noreply@example.com"`，并且您使用 `--header="您的名字"`，则 From 头部将显示为：`"您的名字" <noreply@example.com>`。
 
 ## 📚 命令行参考
 
@@ -115,7 +117,8 @@ usage: sender --recipients=RECIPIENTS [<flags>]
   -b, --body=BODY                正文文本或文件
   -c, --config=CONFIG            配置文件，格式：.json
   -e, --content_type=PLAIN_TEXT  内容类型，格式：HTML 或 PLAIN_TEXT（默认）
-  -r, --header=HEADER            头部文本
+  -r, --header=HEADER            发件人显示名称（与配置文件中的发件人地址
+                                 一起使用）
   -p, --recipients=RECIPIENTS    收件人列表，格式：
                                  alen@example.com,cc:bob@example.com
   -t, --title=TITLE              标题文本

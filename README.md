@@ -73,10 +73,12 @@ Send emails with various options:
   --attachment="attach1.txt,attach2.txt" \
   --body="body.txt" \
   --content_type="PLAIN_TEXT" \
-  --header="HEADER" \
+  --header="Your Name" \
   --recipients="alen@example.com,bob@example.com,cc:catherine@example.com" \
   --title="TITLE"
 ```
+
+**Note:** The `--header` option specifies the display name for the sender. The actual From email address is taken from the `sender` field in the config file. For example, if config contains `"sender": "noreply@example.com"` and you use `--header="Your Name"`, the From header will be: `"Your Name" <noreply@example.com>`.
 
 ## 📚 Command Line Reference
 
@@ -116,7 +118,8 @@ Flags:
   -c, --config=CONFIG            Config file, format: .json
   -e, --content_type=PLAIN_TEXT  Content type, format: HTML or PLAIN_TEXT
                                  (default)
-  -r, --header=HEADER            Header text
+  -r, --header=HEADER            Sender display name (used with sender address
+                                 from config file)
   -p, --recipients=RECIPIENTS    Recipients list, format:
                                  alen@example.com,cc:bob@example.com
   -t, --title=TITLE              Title text
