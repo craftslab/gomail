@@ -134,6 +134,12 @@ func (m *Message) SetAddressHeader(field, address, name string) {
 // FormatAddress formats an address and a name as a valid RFC 5322 address.
 func (m *Message) FormatAddress(address, name string) string {
 	if name == "" {
+		// For addresses without display name, wrap in angle brackets if the local part
+		// contains dots or other special characters to prevent misinterpretation
+		// e.g., dev.devops@example.com -> <dev.devops@example.com>
+		if needsAngleBrackets(address) {
+			return "<" + address + ">"
+		}
 		return address
 	}
 
@@ -161,6 +167,37 @@ func (m *Message) FormatAddress(address, name string) string {
 	addr := m.buf.String()
 	m.buf.Reset()
 	return addr
+}
+
+// needsAngleBrackets determines if an email address should be wrapped in angle brackets
+// to prevent misinterpretation by email clients, particularly for addresses with dots
+// in the local part (e.g., dev.devops@example.com)
+func needsAngleBrackets(address string) bool {
+	// Find the @ symbol
+	atIndex := -1
+	for i := 0; i < len(address); i++ {
+		if address[i] == '@' {
+			atIndex = i
+			break
+		}
+	}
+
+	if atIndex <= 0 {
+		return false // Invalid or missing local part
+	}
+
+	localPart := address[:atIndex]
+
+	// Check if local part contains dots or other special characters
+	// that might be misinterpreted as display name separators
+	for i := 0; i < len(localPart); i++ {
+		switch localPart[i] {
+		case '.', '+', '-', '_':
+			return true
+		}
+	}
+
+	return false
 }
 
 func hasSpecials(text string) bool {

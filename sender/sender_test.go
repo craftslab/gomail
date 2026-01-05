@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
+
+	gomail "github.com/go-mail/mail"
 )
 
 func TestParseConfig(t *testing.T) {
@@ -902,8 +904,8 @@ func TestRecipientFilteringPreservesDistinction(t *testing.T) {
 		},
 		{
 			name:        "invalid_to_multiple_valid_cc",
-			recipients:  "invalid@,cc:jia.jia@zte.com.cn,cc:zhang.san@zte.com.cn",
-			expectedCC:  []string{"jia.jia@zte.com.cn", "zhang.san@zte.com.cn"},
+			recipients:  "invalid@,cc:jia.jia@example.com,cc:zhang.san@example.com",
+			expectedCC:  []string{"jia.jia@example.com", "zhang.san@example.com"},
 			expectedTO:  []string{},
 			description: "Invalid TO with multiple valid CC should preserve all CC",
 		},
@@ -1492,6 +1494,127 @@ func TestSendMailFromHeader(t *testing.T) {
 			// Expected From header format: SetAddressHeader("From", config.Sender, data.From)
 			t.Logf("%s: From field=%q, Sender=%q, Expected Format=%q",
 				tt.description, mail.From, config.Sender, tt.expectedFormat)
+		})
+	}
+}
+
+// TestFromHeaderGeneration tests that the From header is correctly generated
+// with --header as display name and config.Sender as email address
+func TestFromHeaderGeneration(t *testing.T) {
+	config := Config{
+		Host:   "smtp.example.com",
+		Pass:   "password",
+		Port:   587,
+		Sender: "noreply@example.com",
+		Sep:    ",",
+		User:   "user",
+	}
+
+	tests := []struct {
+		name           string
+		headerValue    string
+		expectedFormat string
+		description    string
+	}{
+		{
+			name:           "With display name",
+			headerValue:    "iChange",
+			expectedFormat: `"iChange" <noreply@example.com>`,
+			description:    "When --header='iChange', From should be '\"iChange\" <noreply@example.com>'",
+		},
+		{
+			name:           "With name containing space",
+			headerValue:    "Jenkins CI",
+			expectedFormat: `"Jenkins CI" <noreply@example.com>`,
+			description:    "When --header='Jenkins CI', From should be '\"Jenkins CI\" <noreply@example.com>'",
+		},
+		{
+			name:           "Without display name",
+			headerValue:    "",
+			expectedFormat: "noreply@example.com",
+			description:    "When --header is empty, From should be just the email address",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create a message and set From header using the same logic as sendMail
+			msg := gomail.NewMessage()
+			msg.SetAddressHeader("From", config.Sender, tt.headerValue)
+
+			// Get the From header value
+			fromHeader := msg.GetHeader("From")
+			if len(fromHeader) != 1 {
+				t.Fatalf("Expected 1 From header, got %d", len(fromHeader))
+			}
+
+			actual := fromHeader[0]
+			if actual != tt.expectedFormat {
+				t.Errorf("%s\nGot:      %q\nExpected: %q", tt.description, actual, tt.expectedFormat)
+			} else {
+				t.Logf("✓ %s", tt.description)
+			}
+		})
+	}
+}
+
+// TestFromHeaderWithDottedAddress tests that addresses with dots in local part
+// correctly use --header as display name, not the address local part
+func TestFromHeaderWithDottedAddress(t *testing.T) {
+	tests := []struct {
+		name           string
+		senderAddress  string
+		headerValue    string
+		expectedFormat string
+		description    string
+	}{
+		{
+			name:           "Simple address with header",
+			senderAddress:  "mail@example.com",
+			headerValue:    "iChange",
+			expectedFormat: `"iChange" <mail@example.com>`,
+			description:    "Simple address should use header as display name",
+		},
+		{
+			name:           "Dotted address with header",
+			senderAddress:  "dev.devops@example.com",
+			headerValue:    "iChange",
+			expectedFormat: `"iChange" <dev.devops@example.com>`,
+			description:    "Dotted address should use header as display name, not 'dev.devops'",
+		},
+		{
+			name:           "Dotted address without header",
+			senderAddress:  "dev.devops@example.com",
+			headerValue:    "",
+			expectedFormat: "<dev.devops@example.com>",
+			description:    "Dotted address without header should be wrapped in angle brackets to prevent misinterpretation",
+		},
+		{
+			name:           "Multiple dots in address",
+			senderAddress:  "john.doe.smith@example.com",
+			headerValue:    "John Smith",
+			expectedFormat: `"John Smith" <john.doe.smith@example.com>`,
+			description:    "Multiple dots should still use header as display name",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			msg := gomail.NewMessage()
+			msg.SetAddressHeader("From", tt.senderAddress, tt.headerValue)
+
+			fromHeader := msg.GetHeader("From")
+			if len(fromHeader) != 1 {
+				t.Fatalf("Expected 1 From header, got %d", len(fromHeader))
+			}
+
+			actual := fromHeader[0]
+			if actual != tt.expectedFormat {
+				t.Errorf("%s\nGot:      %q\nExpected: %q\nThis means --header value is not being used correctly!",
+					tt.description, actual, tt.expectedFormat)
+			} else {
+				t.Logf("✓ %s", tt.description)
+			}
 		})
 	}
 }
